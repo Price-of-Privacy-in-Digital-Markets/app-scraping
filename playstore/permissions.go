@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 )
 
@@ -24,13 +25,11 @@ func ScrapePermissions(ctx context.Context, client *http.Client, appId string) (
 	}()
 
 	permissionUrl := "https://play.google.com/_/PlayStoreUi/data/batchexecute?rpcids=qnKhOb&f.sid=-697906427155521722&bl=boq_playuiserver_20190903.08_p0&hl=en&authuser&soc-app=121&soc-platform=1&soc-device=1&_reqid=1065213"
-	// TODO: Write this in terms of the unescaped body
-	sb := strings.Builder{}
-	sb.WriteString(`f.req=%5B%5B%5B%22xdSrCf%22%2C%22%5B%5Bnull%2C%5B%5C%22`)
-	sb.WriteString(appId)
-	sb.WriteString(`%5C%22%2C7%5D%2C%5B%5D%5D%5D%22%2Cnull%2C%221%22%5D%5D%5D`)
 
-	req, err := http.NewRequestWithContext(ctx, "POST", permissionUrl, strings.NewReader(sb.String()))
+	form := url.Values{}
+	form.Set("f.req", fmt.Sprintf(`[[["xdSrCf","[[null,[\"%s\",7],[]]]",null,"1"]]]`, appId))
+
+	req, err := http.NewRequestWithContext(ctx, "POST", permissionUrl, strings.NewReader(form.Encode()))
 	if err != nil {
 		return
 	}
