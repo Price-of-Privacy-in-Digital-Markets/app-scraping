@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"math"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -188,66 +187,66 @@ func ScrapeDetails(ctx context.Context, client *http.Client, appId string, count
 	// Now try and extract the data from the JSON blobs
 	extract := newExtractor(dataMap, serviceRequestIdMap)
 
-	descriptionHTML := extract.String("ds:6", 0, 10, 0, 1)
+	descriptionHTML := extract.Block("ds:6").String(0, 10, 0, 1)
 	description, err := textFromHTML(descriptionHTML)
 	if err != nil {
 		extract.Error(fmt.Errorf("app description contains invalid HTML"))
 	}
 
-	inAppPurchases := extract.OptionalString("ds:6", 0, 12, 12, 0)
+	inAppPurchases := extract.Block("ds:6").OptionalString(0, 12, 12, 0)
 
 	details = Details{
 		AppId:                    appId,
 		Country:                  country,
 		Language:                 language,
-		Title:                    extract.String("ds:6", 0, 0, 0),
+		Title:                    extract.Block("ds:6").String(0, 0, 0),
 		Description:              description,
 		DescriptionHTML:          descriptionHTML,
-		Summary:                  extract.String("ds:6", 0, 10, 1, 1),
-		Installs:                 extract.String("ds:6", 0, 12, 9, 0),
-		MinInstalls:              extract.Number("ds:6", 0, 12, 9, 1),
-		MaxInstalls:              extract.Number("ds:6", 0, 12, 9, 2),
-		Score:                    extract.OptionalFloat64("ds:7", 0, 6, 0, 1),
-		ScoreText:                extract.OptionalString("ds:7", 0, 6, 0, 0),
-		Ratings:                  extract.OptionalInt64("ds:7", 0, 6, 2, 1).OrElse(0),
-		Reviews:                  extract.OptionalInt64("ds:7", 0, 6, 3, 1).OrElse(0),
-		Histogram:                histogram(extract.Json("ds:7", 0, 6, 1), extract.Error),
-		Price:                    price(extract.OptionalFloat64("ds:4", 0, 2, 0, 0, 0, 1, 0, 0)),
-		Currency:                 extract.String("ds:4", 0, 2, 0, 0, 0, 1, 0, 1),
-		PriceText:                priceText(extract.OptionalString("ds:4", 0, 2, 0, 0, 0, 1, 0, 2)),
-		Sale:                     extract.Bool("ds:4", 0, 2, 0, 0, 0, 14, 0, 0),
-		SaleTime:                 saleTime(extract.OptionalInt64("ds:4", 0, 2, 0, 0, 0, 14, 0, 0)),
-		OriginalPrice:            originalPrice(extract.OptionalFloat64("ds:4", 0, 2, 0, 0, 0, 1, 1, 0)),
-		SaleText:                 extract.OptionalString("ds:3", 0, 2, 0, 0, 0, 14, 1),
-		Available:                extract.Bool("ds:6", 0, 12, 11, 0),
+		Summary:                  extract.Block("ds:6").String(0, 10, 1, 1),
+		Installs:                 extract.Block("ds:6").String(0, 12, 9, 0),
+		MinInstalls:              extract.Block("ds:6").Number(0, 12, 9, 1),
+		MaxInstalls:              extract.Block("ds:6").Number(0, 12, 9, 2),
+		Score:                    extract.Block("ds:7").OptionalFloat64(0, 6, 0, 1),
+		ScoreText:                extract.Block("ds:7").OptionalString(0, 6, 0, 0),
+		Ratings:                  extract.Block("ds:7").OptionalInt64(0, 6, 2, 1).OrElse(0),
+		Reviews:                  extract.Block("ds:7").OptionalInt64(0, 6, 3, 1).OrElse(0),
+		Histogram:                histogram(extract.Block("ds:7").Json(0, 6, 1), extract.Error),
+		Price:                    price(extract.Block("ds:4").OptionalFloat64(0, 2, 0, 0, 0, 1, 0, 0)),
+		Currency:                 extract.Block("ds:4").String(0, 2, 0, 0, 0, 1, 0, 1),
+		PriceText:                priceText(extract.Block("ds:4").OptionalString(0, 2, 0, 0, 0, 1, 0, 2)),
+		Sale:                     extract.Block("ds:4").Bool(0, 2, 0, 0, 0, 14, 0, 0),
+		SaleTime:                 saleTime(extract.Block("ds:4").OptionalInt64(0, 2, 0, 0, 0, 14, 0, 0)),
+		OriginalPrice:            originalPrice(extract.Block("ds:4").OptionalFloat64(0, 2, 0, 0, 0, 1, 1, 0)),
+		SaleText:                 extract.Block("ds:4").OptionalString(0, 2, 0, 0, 0, 14, 1),
+		Available:                extract.Block("ds:6").Bool(0, 12, 11, 0),
 		OffersIAP:                inAppPurchases.Present(),
 		IAPRange:                 inAppPurchases,
-		Size:                     extract.String("ds:3", 0),
-		AndroidVersion:           extract.String("ds:3", 2),
-		Developer:                extract.String("ds:6", 0, 12, 5, 1),
-		DeveloperId:              developerId(extract.String("ds:6", 0, 12, 5, 5, 4, 2), extract.Error),
-		DeveloperEmail:           extract.OptionalString("ds:6", 0, 12, 5, 2, 0),
-		DeveloperWebsite:         extract.OptionalString("ds:6", 0, 12, 5, 3, 5, 2),
-		DeveloperAddress:         extract.OptionalString("ds:6", 0, 12, 5, 4, 0),
-		PrivacyPolicy:            extract.OptionalString("ds:6", 0, 12, 7, 2),
-		DeveloperInternalID:      extract.String("ds:6", 0, 12, 5, 0, 0),
-		Genre:                    extract.String("ds:6", 0, 12, 13, 0, 0),
-		GenreId:                  extract.String("ds:6", 0, 12, 13, 0, 2),
-		FamilyGenre:              extract.OptionalString("ds:6", 0, 12, 13, 1, 0),
-		FamilyGenreId:            extract.OptionalString("ds:6", 0, 12, 13, 1, 2),
-		Icon:                     extract.String("ds:6", 0, 12, 1, 3, 2),
-		HeaderImage:              extract.OptionalString("ds:6", 0, 12, 2, 3, 2),
-		Screenshots:              screenshots(extract.Json("ds:6", 0, 12, 0), extract.Error),
-		Video:                    extract.OptionalString("ds:6", 0, 12, 3, 0, 3, 2),
-		VideoImage:               extract.OptionalString("ds:6", 0, 12, 3, 1, 3, 2),
-		ContentRating:            extract.OptionalString("ds:6", 0, 12, 4, 0),
-		ContentRatingDescription: extract.OptionalString("ds:6", 0, 12, 4, 2, 1),
-		AdSupported:              extract.Bool("ds:6", 0, 12, 14, 0),
-		Updated:                  updated(extract.Int64("ds:6", 0, 12, 8, 0)),
-		Version:                  extract.String("ds:3", 1),
-		RecentChanges:            extract.OptionalString("ds:6", 0, 12, 6, 1),
-		Comments:                 comments(extract.JsonWithServiceRequestId("UsvDTd", 0), extract.Error),
-		EditorsChoice:            extract.Bool("ds:6", 0, 12, 15, 0),
+		Size:                     extract.Block("ds:3").String(0),
+		AndroidVersion:           extract.Block("ds:3").String(2),
+		Developer:                extract.Block("ds:6").String(0, 12, 5, 1),
+		DeveloperId:              developerId(extract.Block("ds:6").String(0, 12, 5, 5, 4, 2), extract.Error),
+		DeveloperEmail:           extract.Block("ds:6").OptionalString(0, 12, 5, 2, 0),
+		DeveloperWebsite:         extract.Block("ds:6").OptionalString(0, 12, 5, 3, 5, 2),
+		DeveloperAddress:         extract.Block("ds:6").OptionalString(0, 12, 5, 4, 0),
+		PrivacyPolicy:            extract.Block("ds:6").OptionalString(0, 12, 7, 2),
+		DeveloperInternalID:      extract.Block("ds:6").String(0, 12, 5, 0, 0),
+		Genre:                    extract.Block("ds:6").String(0, 12, 13, 0, 0),
+		GenreId:                  extract.Block("ds:6").String(0, 12, 13, 0, 2),
+		FamilyGenre:              extract.Block("ds:6").OptionalString(0, 12, 13, 1, 0),
+		FamilyGenreId:            extract.Block("ds:6").OptionalString(0, 12, 13, 1, 2),
+		Icon:                     extract.Block("ds:6").String(0, 12, 1, 3, 2),
+		HeaderImage:              extract.Block("ds:6").OptionalString(0, 12, 2, 3, 2),
+		Screenshots:              screenshots(extract.Block("ds:6").Json(0, 12, 0), extract.Error),
+		Video:                    extract.Block("ds:6").OptionalString(0, 12, 3, 0, 3, 2),
+		VideoImage:               extract.Block("ds:6").OptionalString(0, 12, 3, 1, 3, 2),
+		ContentRating:            extract.Block("ds:6").OptionalString(0, 12, 4, 0),
+		ContentRatingDescription: extract.Block("ds:6").OptionalString(0, 12, 4, 2, 1),
+		AdSupported:              extract.Block("ds:6").Bool(0, 12, 14, 0),
+		Updated:                  updated(extract.Block("ds:6").Int64(0, 12, 8, 0)),
+		Version:                  extract.Block("ds:3").String(1),
+		RecentChanges:            extract.Block("ds:6").OptionalString(0, 12, 6, 1),
+		Comments:                 comments(extract.BlockWithServiceRequestId("UsvDTd").Json(0), extract.Error),
+		EditorsChoice:            extract.Block("ds:6").Bool(0, 12, 15, 0),
 	}
 
 	if extract.Errors() != nil {
@@ -280,172 +279,6 @@ func (e *DetailsExtractError) Error() string {
 	}
 
 	return sb.String()
-}
-
-type extractor struct {
-	dataMap             map[string]interface{}
-	serviceRequestIdMap map[string]string
-	errors              []error
-}
-
-func newExtractor(dataMap map[string]interface{}, serviceRequestIdMap map[string]string) extractor {
-	return extractor{
-		dataMap:             dataMap,
-		serviceRequestIdMap: serviceRequestIdMap,
-		errors:              nil,
-	}
-}
-
-func (e *extractor) Errors() []error {
-	return e.errors
-}
-
-func (e *extractor) Error(err error) {
-	e.errors = append(e.errors, err)
-}
-
-func (e *extractor) Json(key string, path ...int) interface{} {
-	current := e.dataMap[key]
-	ret, err := pluck(current, path...)
-	if err != nil {
-		return nil
-	}
-	return ret
-}
-
-func (e *extractor) JsonWithServiceRequestId(serviceRequestId string, path ...int) interface{} {
-	key, ok := e.serviceRequestIdMap[serviceRequestId]
-	if !ok {
-		e.Error(fmt.Errorf("extract.JsonWithServiceRequestId(%s, %v): no such service request ID", key, path))
-	}
-	return e.Json(key, path...)
-}
-
-func (e *extractor) Bool(key string, path ...int) bool {
-	val := e.Json(key, path...)
-
-	switch val := val.(type) {
-	case nil:
-		return false
-	case bool:
-		return val
-	case json.Number:
-		floating, err := val.Float64()
-		if err == nil {
-			return floating != 0
-		}
-
-		integer, err := val.Int64()
-		if err == nil {
-			return integer != 0
-		}
-		e.Error(fmt.Errorf("extract.Bool(%s, %v): cannot convert json.Number to float64 or int64", key, path))
-		return false
-	case float64, int64:
-		return val != 0
-	case string:
-		return val != ""
-	default:
-		e.Error(fmt.Errorf("extract.Bool(%s, %v): wrong type", key, path))
-		return false
-	}
-}
-
-func (e *extractor) Number(key string, path ...int) json.Number {
-	val := e.Json(key, path...)
-
-	number, ok := val.(json.Number)
-	if !ok {
-		e.Error(fmt.Errorf("extract.Number(%s, %v): wrong type", key, path))
-	}
-	return number
-}
-
-func (e *extractor) Int64(key string, path ...int) int64 {
-	val := e.Json(key, path...)
-
-	switch val := val.(type) {
-	case int64:
-		return val
-	case float64:
-		if val == math.Trunc(val) {
-			if val > math.MaxInt64 {
-				e.Error(fmt.Errorf("extract.Int64(%s, %v): float64 is too large", key, path))
-				return 0
-			}
-			return int64(val)
-		} else {
-			e.Error(fmt.Errorf("extract.Int64(%s, %v): float64 is not an integer", key, path))
-			return 0
-		}
-	case json.Number:
-		integer, err := val.Int64()
-		if err != nil {
-			e.Error(fmt.Errorf("extract.Int64(%s, %v): cannot convert json.Number to int64", key, path))
-		}
-		return integer
-	default:
-		e.Error(fmt.Errorf("extract.Int64(%s, %v): wrong type", key, path))
-		return 0
-	}
-}
-
-func (e *extractor) String(key string, path ...int) string {
-	val := e.Json(key, path...)
-
-	switch val := val.(type) {
-	case string:
-		return val
-	default:
-		e.Error(fmt.Errorf("extract.String(%s, %v): wrong type", key, path))
-		return ""
-	}
-}
-
-func (e *extractor) OptionalString(key string, path ...int) optional.String {
-	val := e.Json(key, path...)
-
-	switch val := val.(type) {
-	case nil:
-		return optional.String{}
-	case string:
-		return optional.NewString(val)
-	default:
-		e.Error(fmt.Errorf("extract.OptionalString(%s, %v): wrong type", key, path))
-		return optional.String{}
-	}
-}
-
-func (e *extractor) OptionalInt64(key string, path ...int) optional.Int64 {
-	val := e.Json(key, path...)
-
-	if val == nil {
-		return optional.Int64{}
-	}
-	return optional.NewInt64(e.Int64(key, path...))
-}
-
-func (e *extractor) OptionalFloat64(key string, path ...int) optional.Float64 {
-	val := e.Json(key, path...)
-
-	switch val := val.(type) {
-	case nil:
-		return optional.Float64{}
-	case json.Number:
-		floating, err := val.Float64()
-		if err != nil {
-			e.Error(fmt.Errorf("cannot convert json.Number to float64"))
-			return optional.Float64{}
-		}
-		return optional.NewFloat64(floating)
-	case float64:
-		return optional.NewFloat64(val)
-	case int64:
-		return optional.NewFloat64(float64(val))
-	default:
-		e.Error(fmt.Errorf("extract.OptionalFloat64(%s, %v): wrong type", key, path))
-		return optional.Float64{}
-	}
 }
 
 func price(maybePrice optional.Float64) float64 {
