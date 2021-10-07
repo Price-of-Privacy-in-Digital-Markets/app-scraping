@@ -83,57 +83,57 @@ func extractScriptData(body io.Reader) (dataMap map[string]interface{}, serviceR
 }
 
 type Details struct {
-	AppId                    string
-	Country                  string
-	Language                 string
-	Title                    string
-	Description              string
-	DescriptionHTML          string
-	Summary                  string
-	Installs                 string
-	MinInstalls              json.Number
-	MaxInstalls              json.Number
-	Score                    optional.Float64
-	ScoreText                optional.String
-	Ratings                  int64
-	Reviews                  int64
-	Histogram                Histogram
-	Price                    float64
-	Currency                 string
-	PriceText                string
-	Sale                     bool
-	SaleTime                 OptionalTime
-	OriginalPrice            optional.Float64
-	SaleText                 optional.String
-	Available                bool
-	OffersIAP                bool
-	IAPRange                 optional.String
-	Size                     string
-	AndroidVersion           string
-	Developer                string
-	DeveloperId              string
-	DeveloperEmail           optional.String
-	DeveloperWebsite         optional.String
-	DeveloperAddress         optional.String
-	PrivacyPolicy            optional.String
-	DeveloperInternalID      string
-	Genre                    string
-	GenreId                  string
-	FamilyGenre              optional.String
-	FamilyGenreId            optional.String
-	Icon                     string
-	HeaderImage              optional.String
-	Screenshots              []string
-	Video                    optional.String
-	VideoImage               optional.String
-	ContentRating            optional.String
-	ContentRatingDescription optional.String
-	AdSupported              bool
-	Updated                  time.Time
-	Version                  string
-	RecentChanges            optional.String
-	Comments                 []string
-	EditorsChoice            bool
+	AppId                    string           `json:"appId"`
+	Country                  string           `json:"country"`
+	Language                 string           `json:"language"`
+	Title                    string           `json:"title"`
+	Description              string           `json:"description"`
+	DescriptionHTML          string           `json:"descriptionHTML"`
+	Summary                  string           `json:"summary"`
+	Installs                 string           `json:"installs"`
+	MinInstalls              json.Number      `json:"minInstalls"`
+	MaxInstalls              json.Number      `json:"maxInstalls"`
+	Score                    optional.Float64 `json:"score"`
+	ScoreText                optional.String  `json:"scoreText"`
+	Ratings                  int64            `json:"ratings"`
+	Reviews                  int64            `json:"reviews"`
+	Histogram                Histogram        `json:"histogram"`
+	Price                    float64          `json:"price"`
+	Currency                 string           `json:"currency"`
+	PriceText                string           `json:"priceText"`
+	Sale                     bool             `json:"sale"`
+	SaleTime                 OptionalTime     `json:"saleTime"`
+	OriginalPrice            optional.Float64 `json:"originalPrice"`
+	SaleText                 optional.String  `json:"saleText"`
+	Available                bool             `json:"available"`
+	OffersIAP                bool             `json:"offersIAP"`
+	IAPRange                 optional.String  `json:"IAPRange"`
+	Size                     string           `json:"size"`
+	AndroidVersion           string           `json:"androidVersion"`
+	Developer                string           `json:"developer"`
+	DeveloperId              string           `json:"developerId"`
+	DeveloperEmail           optional.String  `json:"developerEmail"`
+	DeveloperWebsite         optional.String  `json:"developerWebsite"`
+	DeveloperAddress         optional.String  `json:"developerAddress"`
+	PrivacyPolicy            optional.String  `json:"privacyPolicy"`
+	DeveloperInternalID      string           `json:"developerInternalID"`
+	Genre                    string           `json:"genre"`
+	GenreId                  string           `json:"genreId"`
+	FamilyGenre              optional.String  `json:"familyGenre"`
+	FamilyGenreId            optional.String  `json:"familyGenreId"`
+	Icon                     string           `json:"icon"`
+	HeaderImage              optional.String  `json:"headerImage"`
+	Screenshots              []string         `json:"screenshots"`
+	Video                    optional.String  `json:"video"`
+	VideoImage               optional.String  `json:"videoImage"`
+	ContentRating            optional.String  `json:"contentRating"`
+	ContentRatingDescription optional.String  `json:"contentRatingDescription"`
+	AdSupported              bool             `json:"adSupported"`
+	Updated                  time.Time        `json:"updated"`
+	Version                  string           `json:"version"`
+	RecentChanges            optional.String  `json:"recentChanges"`
+	Comments                 []string         `json:"comments"`
+	EditorsChoice            bool             `json:"editorsChoice"`
 }
 
 type Histogram struct {
