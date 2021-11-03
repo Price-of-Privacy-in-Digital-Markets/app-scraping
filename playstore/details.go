@@ -90,16 +90,16 @@ type Details struct {
 	Description              string           `json:"description"`
 	DescriptionHTML          string           `json:"descriptionHTML"`
 	Summary                  string           `json:"summary"`
-	Installs                 string           `json:"installs"`
-	MinInstalls              json.Number      `json:"minInstalls"`
-	MaxInstalls              json.Number      `json:"maxInstalls"`
+	Installs                 optional.String  `json:"installs"`
+	MinInstalls              optional.Int64   `json:"minInstalls"`
+	MaxInstalls              optional.Int64   `json:"maxInstalls"`
 	Score                    optional.Float64 `json:"score"`
 	ScoreText                optional.String  `json:"scoreText"`
 	Ratings                  int64            `json:"ratings"`
 	Reviews                  int64            `json:"reviews"`
 	Histogram                Histogram        `json:"histogram"`
 	Price                    float64          `json:"price"`
-	Currency                 string           `json:"currency"`
+	Currency                 optional.String  `json:"currency"`
 	PriceText                string           `json:"priceText"`
 	Sale                     bool             `json:"sale"`
 	SaleTime                 OptionalTime     `json:"saleTime"`
@@ -203,16 +203,16 @@ func ScrapeDetails(ctx context.Context, client *http.Client, appId string, count
 		Description:              description,
 		DescriptionHTML:          descriptionHTML,
 		Summary:                  extract.Block("ds:6").String(0, 10, 1, 1),
-		Installs:                 extract.Block("ds:6").String(0, 12, 9, 0),
-		MinInstalls:              extract.Block("ds:6").Number(0, 12, 9, 1),
-		MaxInstalls:              extract.Block("ds:6").Number(0, 12, 9, 2),
+		Installs:                 extract.Block("ds:6").OptionalString(0, 12, 9, 0),
+		MinInstalls:              extract.Block("ds:6").OptionalInt64(0, 12, 9, 1),
+		MaxInstalls:              extract.Block("ds:6").OptionalInt64(0, 12, 9, 2),
 		Score:                    extract.Block("ds:7").OptionalFloat64(0, 6, 0, 1),
 		ScoreText:                extract.Block("ds:7").OptionalString(0, 6, 0, 0),
 		Ratings:                  extract.Block("ds:7").OptionalInt64(0, 6, 2, 1).OrElse(0),
 		Reviews:                  extract.Block("ds:7").OptionalInt64(0, 6, 3, 1).OrElse(0),
 		Histogram:                histogram(extract.Block("ds:7").Json(0, 6, 1), extract.Error),
 		Price:                    price(extract.Block("ds:4").OptionalFloat64(0, 2, 0, 0, 0, 1, 0, 0)),
-		Currency:                 extract.Block("ds:4").String(0, 2, 0, 0, 0, 1, 0, 1),
+		Currency:                 extract.Block("ds:4").OptionalString(0, 2, 0, 0, 0, 1, 0, 1),
 		PriceText:                priceText(extract.Block("ds:4").OptionalString(0, 2, 0, 0, 0, 1, 0, 2)),
 		Sale:                     extract.Block("ds:4").Bool(0, 2, 0, 0, 0, 14, 0, 0),
 		SaleTime:                 saleTime(extract.Block("ds:4").OptionalInt64(0, 2, 0, 0, 0, 14, 0, 0)),
