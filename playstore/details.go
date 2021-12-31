@@ -111,7 +111,7 @@ type Details struct {
 	Size                     string           `json:"size"`
 	AndroidVersion           string           `json:"androidVersion"`
 	Developer                string           `json:"developer"`
-	DeveloperId              string           `json:"developerId"`
+	DeveloperId              int64            `json:"developerId"`
 	DeveloperEmail           optional.String  `json:"developerEmail"`
 	DeveloperWebsite         optional.String  `json:"developerWebsite"`
 	DeveloperAddress         optional.String  `json:"developerAddress"`
@@ -224,7 +224,7 @@ func ScrapeDetails(ctx context.Context, client *http.Client, appId string, count
 		Size:                     extract.Block("ds:3").String(0),
 		AndroidVersion:           extract.Block("ds:3").String(2),
 		Developer:                extract.Block("ds:6").String(0, 12, 5, 1),
-		DeveloperId:              developerId(extract.Block("ds:6").String(0, 12, 5, 5, 4, 2), extract.Error),
+		DeveloperId:              extract.Block("ds:6").Int64(0, 12, 5, 0, 0),
 		DeveloperEmail:           extract.Block("ds:6").OptionalString(0, 12, 5, 2, 0),
 		DeveloperWebsite:         extract.Block("ds:6").OptionalString(0, 12, 5, 3, 5, 2),
 		DeveloperAddress:         extract.Block("ds:6").OptionalString(0, 12, 5, 4, 0),

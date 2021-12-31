@@ -160,6 +160,12 @@ func (e *blockExtractor) Int64(path ...int) int64 {
 			e.error("Int64", "cannot convert json.Number to int64", path)
 		}
 		return integer
+	case string:
+		converted, err := strconv.ParseInt(val, 10, 64)
+		if err != nil {
+			e.error("Int64", "cannot convert string to int64", path)
+		}
+		return converted
 	default:
 		e.error("Int64", "wrong type", path)
 		return 0
@@ -218,6 +224,13 @@ func (e *blockExtractor) OptionalFloat64(path ...int) optional.Float64 {
 		return optional.NewFloat64(val)
 	case int64:
 		return optional.NewFloat64(float64(val))
+	case string:
+		converted, err := strconv.ParseFloat(val, 64)
+		if err != nil {
+			e.error("OptionalFloat64", "cannot convert string to float", path)
+			return optional.Float64{}
+		}
+		return optional.NewFloat64(converted)
 	default:
 		e.error("OptionalFloat64", "wrong type", path)
 		return optional.Float64{}

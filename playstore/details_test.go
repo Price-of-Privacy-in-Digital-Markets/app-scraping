@@ -66,7 +66,7 @@ func TestScrapeDetails(t *testing.T) {
 	assert.True(t, details.OffersIAP)
 
 	assert.Equal(t, "Jam City, Inc.", details.Developer)
-	assert.Equal(t, "5509190841173705883", details.DeveloperId)
+	assert.Equal(t, int64(5509190841173705883), details.DeveloperId)
 	assertPresentAndEqual(t, "pandapop@support.jamcity.com", details.DeveloperEmail)
 	assertPresentAndEqual(t, "http://www.jamcity.com/privacy", details.PrivacyPolicy)
 	assertPresentAndEqual(t, "3652 Eastham Drive\nCulver City, CA 90232", details.DeveloperAddress)
