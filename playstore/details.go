@@ -382,7 +382,7 @@ func comments(val interface{}, errFunc func(error)) []string {
 }
 
 func updated(val int64) time.Time {
-	return time.Unix(val, 0)
+	return time.Unix(val, 0).UTC()
 }
 
 func saleTime(val optional.Int64) OptionalTime {
@@ -390,5 +390,5 @@ func saleTime(val optional.Int64) OptionalTime {
 	if err != nil {
 		return OptionalTime{}
 	}
-	return NewOptionalTime(time.Unix(timestamp, 0))
+	return NewOptionalTime(time.Unix(timestamp, 0).UTC())
 }
