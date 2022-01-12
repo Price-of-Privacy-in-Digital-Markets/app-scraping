@@ -322,7 +322,10 @@ func ScrapeApp(ctx context.Context, client *http.Client, scrapedC chan<- Scraped
 			i, country := i, country
 			errgrp.Go(func() error {
 				details, err := playstore.ScrapeDetails(scrapeCtx, client, appId, country, config.Language)
-				if err != nil {
+
+				// Sometimes when looking at other countries, the Play Store can report apps as not found
+				// (404 error) rather than unavailable.
+				if err != nil && !errors.Is(err, playstore.ErrAppNotFound) {
 					return err
 				}
 
@@ -339,8 +342,6 @@ func ScrapeApp(ctx context.Context, client *http.Client, scrapedC chan<- Scraped
 			})
 		}
 
-		// In theory, it's possible that the app was deleted in between scraping for the
-		// first time and now but let's ignore that
 		if err := errgrp.Wait(); err != nil {
 			return err
 		}
