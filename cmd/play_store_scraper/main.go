@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
 
 	_ "embed"
 	"log"
@@ -119,7 +120,7 @@ func main() {
 	scrapeCmd := &cobra.Command{
 		Use: "scrape",
 		Run: func(cmd *cobra.Command, args []string) {
-			if err := Scrape(ctx, db, numScrapers); err != nil && err != context.Canceled {
+			if err := Scrape(ctx, db, numScrapers); err != nil && !errors.Is(err, context.Canceled) {
 				log.Printf("%+v", err)
 			}
 		},
@@ -133,7 +134,7 @@ func main() {
 	// exportCmd := &cobra.Command{
 	// 	Use: "export",
 	// 	Run: func(cmd *cobra.Command, args []string) {
-	// 		if err := Export(ctx, db, exportPath, country); err != nil && err != context.Canceled {
+	// 		if err := Export(ctx, db, exportPath, country); err != nil && !errors.Is(err, context.Canceled) {
 	// 			log.Printf("%+v", err)
 	// 		}
 	// 	},
