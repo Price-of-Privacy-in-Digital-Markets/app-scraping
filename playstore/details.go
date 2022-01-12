@@ -99,7 +99,7 @@ type Details struct {
 	Reviews                  int64       `json:"reviews"`
 	Histogram                Histogram   `json:"histogram"`
 	Price                    float64     `json:"price"`
-	Currency                 string      `json:"currency"`
+	Currency                 null.String `json:"currency"`
 	PriceText                string      `json:"price_text"`
 	Sale                     bool        `json:"sale"`
 	SaleTime                 null.Time   `json:"sale_time"`
@@ -212,7 +212,7 @@ func ScrapeDetails(ctx context.Context, client *http.Client, appId string, count
 		Reviews:                  extract.Block("ds:6").OptionalInt64(0, 6, 3, 1).ValueOrZero(),
 		Histogram:                histogram(extract.Block("ds:6").Json(0, 6, 1), extract.Error),
 		Price:                    price(extract.Block("ds:3").OptionalFloat64(0, 2, 0, 0, 0, 1, 0, 0)),
-		Currency:                 extract.Block("ds:3").String(0, 2, 0, 0, 0, 1, 0, 1),
+		Currency:                 extract.Block("ds:3").OptionalString(0, 2, 0, 0, 0, 1, 0, 1),
 		PriceText:                priceText(extract.Block("ds:3").OptionalString(0, 2, 0, 0, 0, 1, 0, 2)),
 		Sale:                     extract.Block("ds:3").Bool(0, 2, 0, 0, 0, 14, 0, 0),
 		SaleTime:                 saleTime(extract.Block("ds:3").OptionalInt64(0, 2, 0, 0, 0, 14, 0, 0)),

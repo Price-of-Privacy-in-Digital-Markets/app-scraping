@@ -73,7 +73,7 @@ func TestPriceText(t *testing.T) {
 	}
 
 	assert.Equal(t, fmt.Sprintf("₹%.2f", details.Price), details.PriceText)
-	assert.Equal(t, "INR", details.Currency)
+	assertPresentAndEqual(t, "INR", details.Currency)
 }
 
 func TestAvailable(t *testing.T) {
