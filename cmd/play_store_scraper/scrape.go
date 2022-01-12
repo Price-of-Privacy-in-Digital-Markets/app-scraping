@@ -93,6 +93,7 @@ func Scrape(ctx context.Context, db *sql.DB, numScrapers int) error {
 					return nil
 				}
 				progress.Add(1)
+				progress.Describe(scrapedApp.AppId)
 				select {
 				case <-ctx.Done():
 					return ctx.Err()
@@ -105,6 +106,7 @@ func Scrape(ctx context.Context, db *sql.DB, numScrapers int) error {
 					return nil
 				}
 				progress.Add(1)
+				progress.Describe(notFound)
 				select {
 				case <-ctx.Done():
 					return ctx.Err()
