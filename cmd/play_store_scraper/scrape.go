@@ -318,12 +318,18 @@ func ScrapeApp(ctx context.Context, client *http.Client, scrapedC chan<- Scraped
 
 		prices := make([]PriceInfo, 1+len(config.AdditionalCountriesForPrice))
 
+		// Some apps don't have a valid currency but I think this is only free apps.
+		// Error if otherwise
+		if !scrapedApp.Currency.Valid {
+			return fmt.Errorf("paid app does not have currency: %s", appId)
+		}
+
 		// Add price information for the primary country
 		prices[0] = PriceInfo{
 			AppId:         appId,
 			Country:       config.Country,
 			Available:     scrapedApp.Available,
-			Currency:      scrapedApp.Currency,
+			Currency:      scrapedApp.Currency.String,
 			Price:         scrapedApp.Price,
 			OriginalPrice: scrapedApp.OriginalPrice,
 		}
@@ -340,11 +346,17 @@ func ScrapeApp(ctx context.Context, client *http.Client, scrapedC chan<- Scraped
 					return err
 				}
 
+				// Some apps don't have a valid currency but I think this is only free apps.
+				// Error if otherwise
+				if !details.Currency.Valid {
+					return fmt.Errorf("paid app does not have currency: %s", appId)
+				}
+
 				prices[i+1] = PriceInfo{
 					AppId:         appId,
 					Country:       country,
 					Available:     details.Available,
-					Currency:      details.Currency,
+					Currency:      details.Currency.String,
 					Price:         details.Price,
 					OriginalPrice: details.OriginalPrice,
 				}
