@@ -93,7 +93,11 @@ func Scrape(ctx context.Context, db *sql.DB, numScrapers int) error {
 					return nil
 				}
 				progress.Add(1)
-				scrapedAppOut <- scrapedApp
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case scrapedAppOut <- scrapedApp:
+				}
 
 			case notFound, more := <-notFoundAppIn:
 				if !more {
@@ -101,17 +105,24 @@ func Scrape(ctx context.Context, db *sql.DB, numScrapers int) error {
 					return nil
 				}
 				progress.Add(1)
-				notFoundAppOut <- notFound
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case notFoundAppOut <- notFound:
+				}
 
 			case prices, more := <-pricesIn:
 				if !more {
 					close(pricesOut)
 					return nil
 				}
-				pricesOut <- prices
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case pricesOut <- prices:
+				}
 			}
 		}
-
 	})
 
 	errgrp.Go(func() error {
@@ -172,7 +183,7 @@ func Scrape(ctx context.Context, db *sql.DB, numScrapers int) error {
 
 							if err := ScrapeApp(ctx, client, scrapedAppIn, notFoundAppIn, pricesIn, scrapeConfig, appId); err != nil {
 								if errors.Is(err, context.Canceled) {
-									return nil
+									return err
 								}
 
 								// Is this a fatal error or shall we ignore it?
