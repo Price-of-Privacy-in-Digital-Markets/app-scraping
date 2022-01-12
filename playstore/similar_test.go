@@ -21,7 +21,7 @@ func TestSimilar(t *testing.T) {
 		if similarApp.AppId == "uk.co.bbc.android.sportdomestic" {
 			foundBBCSport = true
 			assert.Zero(t, similarApp.Price)
-			assert.Equal(t, similarApp.Developer, "Media Applications Technologies for the BBC")
+			assert.Equal(t, similarApp.Developer, "BBC Media App Technologies")
 		} else if similarApp.AppId == "com.bskyb.skynews.android" {
 			foundSkyNews = true
 			assert.Zero(t, similarApp.Price)
