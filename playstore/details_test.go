@@ -6,26 +6,23 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/markphelps/optional"
 	"github.com/stretchr/testify/assert"
+	"gopkg.in/guregu/null.v4"
 )
 
 const nonExistentAppId = "This.App.Id.Does.Not.Exist.Hopefully.12345"
 
 func assertPresentAndEqual(t *testing.T, expected interface{}, actual interface{}) {
 	switch a := actual.(type) {
-	case optional.String:
-		value, err := a.Get()
-		assert.Nil(t, err)
-		assert.Equal(t, expected, value)
-	case optional.Bool:
-		value, err := a.Get()
-		assert.Nil(t, err)
-		assert.Equal(t, expected, value)
-	case optional.Float64:
-		value, err := a.Get()
-		assert.Nil(t, err)
-		assert.Equal(t, expected, value)
+	case null.String:
+		assert.True(t, a.Valid)
+		assert.Equal(t, expected, a.String)
+	case null.Bool:
+		assert.True(t, a.Valid)
+		assert.Equal(t, expected, a.Bool)
+	case null.Float:
+		assert.True(t, a.Valid)
+		assert.Equal(t, expected, a.Float64)
 	}
 }
 
@@ -49,15 +46,14 @@ func TestScrapeDetails(t *testing.T) {
 	assert.Equal(t, "Bubble Shooter: Panda Pop!", details.Title)
 	assert.True(t, details.Available)
 
-	score, err := details.Score.Get()
-	assert.Nil(t, err)
-	if !(1 <= score && score <= 5) {
+	assert.True(t, details.Score.Valid)
+	if !(1 <= details.Score.Float64 && details.Score.Float64 <= 5) {
 		t.Error("Score should be between 1 and 5")
 	}
 
 	assert.Equal(t, "GAME_PUZZLE", details.GenreId)
-	assert.False(t, details.FamilyGenre.Present())
-	assert.False(t, details.FamilyGenreId.Present())
+	assert.False(t, details.FamilyGenre.Valid)
+	assert.False(t, details.FamilyGenreId.Valid)
 
 	assert.Equal(t, "4.4 and up", details.AndroidVersion)
 	assert.Equal(t, "Free", details.PriceText)

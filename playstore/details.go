@@ -13,9 +13,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/markphelps/optional"
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
+	"gopkg.in/guregu/null.v4"
 )
 
 var (
@@ -83,57 +83,57 @@ func extractScriptData(body io.Reader) (dataMap map[string]interface{}, serviceR
 }
 
 type Details struct {
-	AppId                    string           `json:"appId"`
-	Country                  string           `json:"country"`
-	Language                 string           `json:"language"`
-	Title                    string           `json:"title"`
-	Description              string           `json:"description"`
-	DescriptionHTML          string           `json:"descriptionHTML"`
-	Summary                  string           `json:"summary"`
-	Installs                 optional.String  `json:"installs"`
-	MinInstalls              optional.Int64   `json:"minInstalls"`
-	MaxInstalls              optional.Int64   `json:"maxInstalls"`
-	Score                    optional.Float64 `json:"score"`
-	ScoreText                optional.String  `json:"scoreText"`
-	Ratings                  int64            `json:"ratings"`
-	Reviews                  int64            `json:"reviews"`
-	Histogram                Histogram        `json:"histogram"`
-	Price                    float64          `json:"price"`
-	Currency                 optional.String  `json:"currency"`
-	PriceText                string           `json:"priceText"`
-	Sale                     bool             `json:"sale"`
-	SaleTime                 OptionalTime     `json:"saleTime"`
-	OriginalPrice            optional.Float64 `json:"originalPrice"`
-	SaleText                 optional.String  `json:"saleText"`
-	Available                bool             `json:"available"`
-	OffersIAP                bool             `json:"offersIAP"`
-	IAPRange                 optional.String  `json:"IAPRange"`
-	Size                     string           `json:"size"`
-	AndroidVersion           string           `json:"androidVersion"`
-	Developer                string           `json:"developer"`
-	DeveloperId              int64            `json:"developerId"`
-	DeveloperEmail           optional.String  `json:"developerEmail"`
-	DeveloperWebsite         optional.String  `json:"developerWebsite"`
-	DeveloperAddress         optional.String  `json:"developerAddress"`
-	PrivacyPolicy            optional.String  `json:"privacyPolicy"`
-	DeveloperInternalID      string           `json:"developerInternalID"`
-	Genre                    string           `json:"genre"`
-	GenreId                  string           `json:"genreId"`
-	FamilyGenre              optional.String  `json:"familyGenre"`
-	FamilyGenreId            optional.String  `json:"familyGenreId"`
-	Icon                     string           `json:"icon"`
-	HeaderImage              optional.String  `json:"headerImage"`
-	Screenshots              []string         `json:"screenshots"`
-	Video                    optional.String  `json:"video"`
-	VideoImage               optional.String  `json:"videoImage"`
-	ContentRating            optional.String  `json:"contentRating"`
-	ContentRatingDescription optional.String  `json:"contentRatingDescription"`
-	AdSupported              bool             `json:"adSupported"`
-	Updated                  time.Time        `json:"updated"`
-	Version                  string           `json:"version"`
-	RecentChanges            optional.String  `json:"recentChanges"`
-	Comments                 []string         `json:"comments"`
-	EditorsChoice            bool             `json:"editorsChoice"`
+	AppId                    string      `json:"appId"`
+	Country                  string      `json:"country"`
+	Language                 string      `json:"language"`
+	Title                    string      `json:"title"`
+	Description              string      `json:"description"`
+	DescriptionHTML          string      `json:"description_html"`
+	Summary                  string      `json:"summary"`
+	Installs                 null.String `json:"installs"`
+	MinInstalls              null.Int    `json:"min_installs"`
+	MaxInstalls              null.Int    `json:"max_installs"`
+	Score                    null.Float  `json:"score"`
+	ScoreText                null.String `json:"score_text"`
+	Ratings                  int64       `json:"ratings"`
+	Reviews                  int64       `json:"reviews"`
+	Histogram                Histogram   `json:"histogram"`
+	Price                    float64     `json:"price"`
+	Currency                 string      `json:"currency"`
+	PriceText                string      `json:"price_text"`
+	Sale                     bool        `json:"sale"`
+	SaleTime                 null.Time   `json:"sale_time"`
+	OriginalPrice            null.Float  `json:"original_price"`
+	SaleText                 null.String `json:"sale_text"`
+	Available                bool        `json:"available"`
+	OffersIAP                bool        `json:"offers_iap"`
+	IAPRange                 null.String `json:"iap_range"`
+	Size                     string      `json:"size"`
+	AndroidVersion           string      `json:"android_version"`
+	Developer                string      `json:"developer"`
+	DeveloperId              int64       `json:"developer_id"`
+	DeveloperEmail           null.String `json:"developer_email"`
+	DeveloperWebsite         null.String `json:"developer_website"`
+	DeveloperAddress         null.String `json:"developer_address"`
+	PrivacyPolicy            null.String `json:"privacy_policy"`
+	DeveloperInternalID      string      `json:"developer_internal_id"`
+	Genre                    string      `json:"genre"`
+	GenreId                  string      `json:"genre_id"`
+	FamilyGenre              null.String `json:"family_genre"`
+	FamilyGenreId            null.String `json:"family_genre_id"`
+	Icon                     string      `json:"icon"`
+	HeaderImage              null.String `json:"header_image"`
+	Screenshots              []string    `json:"screenshots"`
+	Video                    null.String `json:"video"`
+	VideoImage               null.String `json:"video_image"`
+	ContentRating            null.String `json:"content_rating"`
+	ContentRatingDescription null.String `json:"content_rating_description"`
+	AdSupported              bool        `json:"ad_supported"`
+	Updated                  time.Time   `json:"updated"`
+	Version                  string      `json:"version"`
+	RecentChanges            null.String `json:"recent_changes"`
+	Comments                 []string    `json:"comments"`
+	EditorsChoice            bool        `json:"editors_choice"`
 }
 
 type Histogram struct {
@@ -208,18 +208,18 @@ func ScrapeDetails(ctx context.Context, client *http.Client, appId string, count
 		MaxInstalls:              extract.Block("ds:6").OptionalInt64(0, 12, 9, 2),
 		Score:                    extract.Block("ds:7").OptionalFloat64(0, 6, 0, 1),
 		ScoreText:                extract.Block("ds:7").OptionalString(0, 6, 0, 0),
-		Ratings:                  extract.Block("ds:7").OptionalInt64(0, 6, 2, 1).OrElse(0),
-		Reviews:                  extract.Block("ds:7").OptionalInt64(0, 6, 3, 1).OrElse(0),
+		Ratings:                  extract.Block("ds:7").OptionalInt64(0, 6, 2, 1).ValueOrZero(),
+		Reviews:                  extract.Block("ds:7").OptionalInt64(0, 6, 3, 1).ValueOrZero(),
 		Histogram:                histogram(extract.Block("ds:7").Json(0, 6, 1), extract.Error),
 		Price:                    price(extract.Block("ds:4").OptionalFloat64(0, 2, 0, 0, 0, 1, 0, 0)),
-		Currency:                 extract.Block("ds:4").OptionalString(0, 2, 0, 0, 0, 1, 0, 1),
+		Currency:                 extract.Block("ds:4").String(0, 2, 0, 0, 0, 1, 0, 1),
 		PriceText:                priceText(extract.Block("ds:4").OptionalString(0, 2, 0, 0, 0, 1, 0, 2)),
 		Sale:                     extract.Block("ds:4").Bool(0, 2, 0, 0, 0, 14, 0, 0),
 		SaleTime:                 saleTime(extract.Block("ds:4").OptionalInt64(0, 2, 0, 0, 0, 14, 0, 0)),
 		OriginalPrice:            originalPrice(extract.Block("ds:4").OptionalFloat64(0, 2, 0, 0, 0, 1, 1, 0)),
 		SaleText:                 extract.Block("ds:4").OptionalString(0, 2, 0, 0, 0, 14, 1),
 		Available:                extract.Block("ds:6").Bool(0, 12, 11, 0),
-		OffersIAP:                inAppPurchases.Present(),
+		OffersIAP:                inAppPurchases.Valid,
 		IAPRange:                 inAppPurchases,
 		Size:                     extract.Block("ds:3").String(0),
 		AndroidVersion:           extract.Block("ds:3").String(2),
@@ -281,21 +281,17 @@ func (e *DetailsExtractError) Error() string {
 	return sb.String()
 }
 
-func price(maybePrice optional.Float64) float64 {
-	return maybePrice.OrElse(0) / 1000000
+func price(maybePrice null.Float) float64 {
+	return maybePrice.ValueOrZero() / 1000000
 }
 
-func originalPrice(maybePrice optional.Float64) optional.Float64 {
-	price, err := maybePrice.Get()
-	if err != nil {
-		return optional.Float64{}
-	}
-	return optional.NewFloat64(price / 1000000)
+func originalPrice(maybePrice null.Float) null.Float {
+	return null.NewFloat(maybePrice.Float64/1000000, maybePrice.Valid)
 }
 
-func priceText(maybePriceText optional.String) string {
-	priceText, err := maybePriceText.Get()
-	if err != nil || priceText == "" {
+func priceText(maybePriceText null.String) string {
+	priceText := maybePriceText.ValueOrZero()
+	if priceText == "" {
 		return "Free"
 	}
 	return priceText
@@ -319,16 +315,6 @@ func histogram(val interface{}, errFunc func(error)) Histogram {
 		Stars4: pluckPanic(val, 4, 1).(json.Number),
 		Stars5: pluckPanic(val, 5, 1).(json.Number),
 	}
-}
-
-func developerId(val string, errFunc func(error)) string {
-	defer func() {
-		if r := recover(); r != nil {
-			errFunc(fmt.Errorf("developerId: %v", r))
-		}
-	}()
-
-	return strings.Split(val, "id=")[1]
 }
 
 func screenshots(val interface{}, errFunc func(error)) []string {
@@ -385,10 +371,9 @@ func updated(val int64) time.Time {
 	return time.Unix(val, 0).UTC()
 }
 
-func saleTime(val optional.Int64) OptionalTime {
-	timestamp, err := val.Get()
-	if err != nil {
-		return OptionalTime{}
+func saleTime(val null.Int) null.Time {
+	if val.Valid {
+		return null.TimeFrom(time.Unix(val.Int64, 0).UTC())
 	}
-	return NewOptionalTime(time.Unix(timestamp, 0).UTC())
+	return null.Time{}
 }

@@ -7,43 +7,44 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strconv"
-	"time"
+
+	"gopkg.in/guregu/null.v4"
 )
 
 type Details struct {
-	Id                    AppId     `json:"id"`
-	BundleId              string    `json:"bundleId"`
-	Title                 string    `json:"title"`
-	Url                   string    `json:"url"`
-	Description           string    `json:"description"`
-	Icon                  string    `json:"icon"`
-	Genres                []string  `json:"genres"`
-	GenreIds              []int64   `json:"genreIds"`
-	PrimaryGenre          string    `json:"primaryGenre"`
-	PrimaryGenreId        int64     `json:"primaryGenreId"`
-	ContentRating         string    `json:"contentRating"`
-	ContentAdvisories     []string  `json:"contentAdvisories"`
-	Languages             []string  `json:"languages"`
-	Size                  int64     `json:"size"`
-	RequiredOsVersion     string    `json:"requiredOsVersion"`
-	Released              time.Time `json:"released"`
-	Updated               time.Time `json:"updated"`
-	ReleaseNotes          string    `json:"releaseNotes"`
-	Version               string    `json:"version"`
-	Price                 float64   `json:"price"`
-	Currency              string    `json:"currency"`
-	DeveloperId           int64     `json:"developerId"`
-	Developer             string    `json:"developer"`
-	DeveloperUrl          string    `json:"developerUrl"`
-	DeveloperWebsite      string    `json:"developerWebsite"`
-	Score                 float64   `json:"score"`
-	Reviews               int64     `json:"reviews"`
-	CurrentVersionScore   float64   `json:"currentVersionScore"`
-	CurrentVersionReviews int64     `json:"currentVersionReviews"`
-	Screenshots           []string  `json:"screenshots"`
-	IpadScreenshots       []string  `json:"ipadScreenshots"`
-	AppletvScreenshots    []string  `json:"appletvScreenshots"`
-	SupportedDevices      []string  `json:"supportedDevices"`
+	AppId                 AppId      `json:"app_id"`
+	BundleId              string     `json:"bundle_id"`
+	Title                 string     `json:"title"`
+	Url                   string     `json:"url"`
+	Description           string     `json:"description"`
+	Icon                  string     `json:"icon"`
+	Genres                []string   `json:"genres"`
+	GenreIds              []int64    `json:"genre_ids"`
+	PrimaryGenre          string     `json:"primary_genre"`
+	PrimaryGenreId        int64      `json:"primary_genre_id"`
+	ContentRating         string     `json:"content_rating"`
+	ContentAdvisories     []string   `json:"content_advisories"`
+	Languages             []string   `json:"languages"`
+	Size                  int64      `json:"size"`
+	RequiredOsVersion     string     `json:"required_os_version"`
+	Released              null.Time  `json:"released"`
+	Updated               null.Time  `json:"updated"`
+	ReleaseNotes          string     `json:"release_notes"`
+	Version               string     `json:"version"`
+	Price                 float64    `json:"price"`
+	Currency              string     `json:"currency"`
+	DeveloperId           int64      `json:"developer_id"`
+	Developer             string     `json:"developer"`
+	DeveloperUrl          string     `json:"developer_url"`
+	DeveloperWebsite      string     `json:"developer_website"`
+	Score                 float64    `json:"score"`
+	Reviews               int64      `json:"reviews"`
+	CurrentVersionScore   null.Float `json:"current_version_score"`
+	CurrentVersionReviews int64      `json:"current_version_reviews"`
+	Screenshots           []string   `json:"screenshots"`
+	IpadScreenshots       []string   `json:"ipad_screenshots"`
+	AppletvScreenshots    []string   `json:"appletv_screenshots"`
+	SupportedDevices      []string   `json:"supported_devices"`
 }
 
 func ScrapeDetails(ctx context.Context, client *http.Client, appIds []AppId) (map[AppId]Details, error) {
@@ -89,7 +90,7 @@ func ScrapeDetails(ctx context.Context, client *http.Client, appIds []AppId) (ma
 		return nil, err
 	}
 	for _, details := range detailsList {
-		result[details.Id] = details
+		result[details.AppId] = details
 	}
 
 	return result, err
@@ -118,7 +119,7 @@ func (lr *lookupResponse) ToDetails() ([]Details, error) {
 		}
 
 		details := Details{
-			Id:                    AppId(result.TrackID),
+			AppId:                 AppId(result.TrackID),
 			BundleId:              result.BundleID,
 			Title:                 result.TrackName,
 			Url:                   result.TrackViewURL,
@@ -181,7 +182,7 @@ type lookupResponse struct {
 		SellerURL                          string        `json:"sellerUrl"`
 		FormattedPrice                     string        `json:"formattedPrice"`
 		ContentAdvisoryRating              string        `json:"contentAdvisoryRating"`
-		AverageUserRatingForCurrentVersion float64       `json:"averageUserRatingForCurrentVersion"`
+		AverageUserRatingForCurrentVersion null.Float    `json:"averageUserRatingForCurrentVersion"`
 		UserRatingCountForCurrentVersion   int64         `json:"userRatingCountForCurrentVersion"`
 		AverageUserRating                  float64       `json:"averageUserRating"`
 		TrackViewURL                       string        `json:"trackViewUrl"`
@@ -190,12 +191,12 @@ type lookupResponse struct {
 		Currency                           string        `json:"currency"`
 		TrackID                            int64         `json:"trackId"`
 		TrackName                          string        `json:"trackName"`
-		ReleaseDate                        time.Time     `json:"releaseDate"`
+		ReleaseDate                        null.Time     `json:"releaseDate"`
 		SellerName                         string        `json:"sellerName"`
 		PrimaryGenreName                   string        `json:"primaryGenreName"`
 		GenreIds                           []string      `json:"genreIds"`
 		IsVppDeviceBasedLicensingEnabled   bool          `json:"isVppDeviceBasedLicensingEnabled"`
-		CurrentVersionReleaseDate          time.Time     `json:"currentVersionReleaseDate"`
+		CurrentVersionReleaseDate          null.Time     `json:"currentVersionReleaseDate"`
 		ReleaseNotes                       string        `json:"releaseNotes"`
 		PrimaryGenreID                     int64         `json:"primaryGenreId"`
 		Description                        string        `json:"description"`

@@ -15,7 +15,7 @@ type PrivacyType struct {
 	Identifier string `json:"identifier"`
 
 	// Used by DATA_USED_TO_TRACK_YOU
-	DataCategories []PrivacyDataCategories `json:"dataCategories"`
+	DataCategories []PrivacyDataCategories `json:"data_categories"`
 
 	// Used by DATA_LINKED_TO_YOU
 	Purposes []PrivacyPurpose `json:"purposes"`
@@ -23,12 +23,12 @@ type PrivacyType struct {
 
 type PrivacyDataCategories struct {
 	Identifier string   `json:"identifier"`
-	DataTypes  []string `json:"dataTypes"`
+	DataTypes  []string `json:"data_types"`
 }
 
 type PrivacyPurpose struct {
 	Identifier     string                  `json:"identifier"`
-	DataCategories []PrivacyDataCategories `json:"dataCategories"`
+	DataCategories []PrivacyDataCategories `json:"data_categories"`
 }
 
 // If the app ID is not found, then it is not returned in the map.

@@ -9,17 +9,17 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/markphelps/optional"
+	"gopkg.in/guregu/null.v4"
 )
 
 type SimilarApp struct {
-	AppId     string
-	Title     string
-	Developer string
-	Score     optional.Float64
-	ScoreText string
-	Price     float64
-	Currency  string
+	AppId     string     `json:"app_id"`
+	Title     string     `json:"title"`
+	Developer string     `json:"developer"`
+	Score     null.Float `json:"score"`
+	ScoreText string     `json:"score_text"`
+	Price     float64    `json:"price"`
+	Currency  string     `json:"currency"`
 }
 
 func ScrapeSimilarApps(ctx context.Context, client *http.Client, appId string, country string, language string) ([]SimilarApp, error) {

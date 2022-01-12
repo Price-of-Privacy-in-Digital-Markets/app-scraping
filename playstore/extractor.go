@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/markphelps/optional"
+	"gopkg.in/guregu/null.v4"
 )
 
 type extractor struct {
@@ -184,55 +184,55 @@ func (e *blockExtractor) String(path ...int) string {
 	}
 }
 
-func (e *blockExtractor) OptionalString(path ...int) optional.String {
+func (e *blockExtractor) OptionalString(path ...int) null.String {
 	val := e.Json(path...)
 
 	switch val := val.(type) {
 	case nil:
-		return optional.String{}
+		return null.String{}
 	case string:
-		return optional.NewString(val)
+		return null.StringFrom(val)
 	default:
 		e.error("OptionalString", "wrong type", path)
-		return optional.String{}
+		return null.String{}
 	}
 }
 
-func (e *blockExtractor) OptionalInt64(path ...int) optional.Int64 {
+func (e *blockExtractor) OptionalInt64(path ...int) null.Int {
 	val := e.Json(path...)
 
 	if val == nil {
-		return optional.Int64{}
+		return null.Int{}
 	}
-	return optional.NewInt64(e.Int64(path...))
+	return null.IntFrom(e.Int64(path...))
 }
 
-func (e *blockExtractor) OptionalFloat64(path ...int) optional.Float64 {
+func (e *blockExtractor) OptionalFloat64(path ...int) null.Float {
 	val := e.Json(path...)
 
 	switch val := val.(type) {
 	case nil:
-		return optional.Float64{}
+		return null.Float{}
 	case json.Number:
 		floating, err := val.Float64()
 		if err != nil {
 			e.error("OptionalFloat64", "cannot convert json.Number to float64", path)
-			return optional.Float64{}
+			return null.Float{}
 		}
-		return optional.NewFloat64(floating)
+		return null.FloatFrom(floating)
 	case float64:
-		return optional.NewFloat64(val)
+		return null.FloatFrom(val)
 	case int64:
-		return optional.NewFloat64(float64(val))
+		return null.FloatFrom(float64(val))
 	case string:
 		converted, err := strconv.ParseFloat(val, 64)
 		if err != nil {
 			e.error("OptionalFloat64", "cannot convert string to float", path)
-			return optional.Float64{}
+			return null.Float{}
 		}
-		return optional.NewFloat64(converted)
+		return null.FloatFrom(converted)
 	default:
 		e.error("OptionalFloat64", "wrong type", path)
-		return optional.Float64{}
+		return null.Float{}
 	}
 }

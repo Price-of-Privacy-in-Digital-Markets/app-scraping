@@ -11,8 +11,8 @@ import (
 )
 
 type Permission struct {
-	Group      string
-	Permission string
+	Group      string `json:"group"`
+	Permission string `json:"permission"`
 }
 
 func ScrapePermissions(ctx context.Context, client *http.Client, appId string) (permissions []Permission, err error) {
@@ -20,7 +20,7 @@ func ScrapePermissions(ctx context.Context, client *http.Client, appId string) (
 	defer func() {
 		r := recover()
 		if r != nil {
-			err = fmt.Errorf("panic when extracting permissions: %w", r)
+			err = fmt.Errorf("panic when extracting permissions: %v", r)
 		}
 	}()
 
