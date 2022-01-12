@@ -162,7 +162,7 @@ func ScrapeDetails(ctx context.Context, client *http.Client, appId string, count
 	}
 
 	if resp.StatusCode == 404 {
-		err = &AppNotFoundError{appId}
+		err = ErrAppNotFound
 		return
 	}
 

@@ -54,7 +54,7 @@ func ScrapePermissions(ctx context.Context, client *http.Client, appId string) (
 
 	data, ok := pluckPanic(input, 0, 2).(string)
 	if !ok {
-		err = &AppNotFoundError{appId}
+		err = ErrAppNotFound
 		return
 	}
 

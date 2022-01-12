@@ -33,7 +33,5 @@ func TestPermissions(t *testing.T) {
 
 func TestPermissionsNotFound(t *testing.T) {
 	_, err := ScrapePermissions(context.Background(), http.DefaultClient, nonExistentAppId)
-	errNotFound := &AppNotFoundError{}
-	assert.ErrorAs(t, err, &errNotFound)
-	assert.Equal(t, nonExistentAppId, errNotFound.AppId)
+	assert.ErrorIs(t, err, ErrAppNotFound)
 }

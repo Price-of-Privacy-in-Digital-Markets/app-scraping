@@ -28,9 +28,7 @@ func assertPresentAndEqual(t *testing.T, expected interface{}, actual interface{
 
 func TestNotFound(t *testing.T) {
 	_, err := ScrapeDetails(context.Background(), http.DefaultClient, nonExistentAppId, "us", "en")
-	errNotFound := &AppNotFoundError{}
-	assert.ErrorAs(t, err, &errNotFound)
-	assert.Equal(t, nonExistentAppId, errNotFound.AppId)
+	assert.ErrorIs(t, err, ErrAppNotFound)
 }
 
 func TestScrapeDetails(t *testing.T) {

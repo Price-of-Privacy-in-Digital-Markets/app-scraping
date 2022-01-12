@@ -1,6 +1,7 @@
 package playstore
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -8,13 +9,7 @@ import (
 	"golang.org/x/net/html/atom"
 )
 
-type AppNotFoundError struct {
-	AppId string
-}
-
-func (err *AppNotFoundError) Error() string {
-	return fmt.Sprintf("app not found: %s", err.AppId)
-}
+var ErrAppNotFound error = errors.New("app not found")
 
 func pluck(val interface{}, path ...int) (interface{}, error) {
 	current := val
