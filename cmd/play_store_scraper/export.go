@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/andybalholm/brotli"
+
+	"github.com/Price-of-Privacy-in-Digital-Markets/app-scraping/playstore"
 )
 
 func Export(ctx context.Context, db *sql.DB, outputPath string) error {
@@ -35,8 +37,10 @@ func Export(ctx context.Context, db *sql.DB, outputPath string) error {
 
 func export(ctx context.Context, db *sql.DB, f io.Writer) error {
 	type ExportedApp struct {
-		ScrapedApp
-		ScrapedWhen time.Time `json:"scraped_when"`
+		playstore.Details
+		ScrapedWhen time.Time              `json:"scraped_when"`
+		SimilarApps []string               `json:"similar"`
+		Permissions []playstore.Permission `json:"permissions"`
 	}
 
 	const query = `
@@ -79,8 +83,15 @@ func export(ctx context.Context, db *sql.DB, f io.Writer) error {
 			return err
 		}
 
+		similarAppIds := make([]string, 0, len(scrapedApp.SimilarApps))
+		for _, similarApp := range scrapedApp.SimilarApps {
+			similarAppIds = append(similarAppIds, similarApp.AppId)
+		}
+
 		exportedApp := ExportedApp{
-			ScrapedApp:  scrapedApp,
+			Details:     scrapedApp.Details,
+			Permissions: scrapedApp.Permissions,
+			SimilarApps: similarAppIds,
 			ScrapedWhen: time.Unix(scrapedWhen, 0).UTC(),
 		}
 
