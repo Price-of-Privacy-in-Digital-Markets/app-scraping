@@ -128,22 +128,20 @@ func main() {
 	scrapeCmd.Flags().IntVar(&numScrapers, "num-scrapers", 20, "Number of simultaneous scrapers")
 	rootCmd.AddCommand(scrapeCmd)
 
-	// var exportPath string
-	// var country string
+	var exportPath string
 
-	// exportCmd := &cobra.Command{
-	// 	Use: "export",
-	// 	Run: func(cmd *cobra.Command, args []string) {
-	// 		if err := Export(ctx, db, exportPath, country); err != nil && !errors.Is(err, context.Canceled) {
-	// 			log.Printf("%+v", err)
-	// 		}
-	// 	},
-	// }
-	// exportCmd.Flags().StringVar(&exportPath, "output", "", "Output file")
-	// exportCmd.MarkFlagRequired("output")
-	// exportCmd.Flags().StringVar(&country, "country", "", "Country")
-	// exportCmd.MarkFlagRequired("country")
-	// rootCmd.AddCommand(exportCmd)
+	exportCmd := &cobra.Command{
+		Use: "export",
+		Run: func(cmd *cobra.Command, args []string) {
+			if err := Export(ctx, db, exportPath); err != nil && !errors.Is(err, context.Canceled) {
+				log.Printf("%+v", err)
+			}
+		},
+	}
+	exportCmd.Flags().StringVar(&exportPath, "output", "", "Output file")
+	exportCmd.MarkFlagRequired("output")
+	exportCmd.MarkFlagRequired("country")
+	rootCmd.AddCommand(exportCmd)
 
 	rootCmd.Execute()
 }
