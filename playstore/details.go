@@ -83,7 +83,7 @@ func extractScriptData(body io.Reader) (dataMap map[string]interface{}, serviceR
 }
 
 type Details struct {
-	AppId                    string      `json:"appId"`
+	AppId                    string      `json:"app_id"`
 	Country                  string      `json:"country"`
 	Language                 string      `json:"language"`
 	Title                    string      `json:"title"`
