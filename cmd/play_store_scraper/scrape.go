@@ -349,8 +349,9 @@ func ScrapeApp(ctx context.Context, client *http.Client, scrapedC chan<- Scraped
 				}
 
 				// Some apps don't have a valid currency but I think this is only free apps.
-				// Error if otherwise
-				if !details.Currency.Valid {
+				// Return Error if otherwise. Only check if the currency is valid or not if
+				// the app was found.
+				if !errors.Is(err, playstore.ErrAppNotFound) && !details.Currency.Valid {
 					return fmt.Errorf("paid app does not have currency: %s", appId)
 				}
 
