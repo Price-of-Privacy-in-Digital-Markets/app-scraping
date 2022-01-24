@@ -78,7 +78,11 @@ func ScrapePrivacy(ctx context.Context, client *http.Client, token Token, appIds
 	appPrivacyLabels := make(map[AppId]PrivacyNutritionLabels)
 
 	for _, app := range response.Data {
-		appPrivacyLabels[app.Id] = PrivacyNutritionLabels(app.Attributes.PrivacyDetails.PrivacyTypes)
+		var privacyTypes []PrivacyType
+		for _, privacyType := range app.Attributes.PrivacyDetails.PrivacyTypes {
+			privacyTypes = append(privacyTypes, privacyType.convert())
+		}
+		appPrivacyLabels[app.Id] = privacyTypes
 	}
 
 	return appPrivacyLabels, nil
@@ -89,8 +93,59 @@ type privacyResponse struct {
 		Id         AppId `json:"id,string"`
 		Attributes struct {
 			PrivacyDetails struct {
-				PrivacyTypes []PrivacyType `json:"privacyTypes"`
+				PrivacyTypes []rawPrivacyType `json:"privacyTypes"`
 			} `json:"privacyDetails"`
 		} `json:"attributes"`
 	} `json:"data"`
+}
+
+type rawPrivacyType struct {
+	// DATA_LINKED_TO_YOU or DATA_USED_TO_TRACK_YOU or DATA_NOT_COLLECTED
+	Identifier string `json:"identifier"`
+
+	// Used by DATA_USED_TO_TRACK_YOU
+	DataCategories []rawPrivacyDataCategories `json:"dataCategories"`
+
+	// Used by DATA_LINKED_TO_YOU
+	Purposes []rawPrivacyPurpose `json:"purposes"`
+}
+
+func (pt *rawPrivacyType) convert() PrivacyType {
+	var dataCategories []PrivacyDataCategories
+	for _, dataCategory := range pt.DataCategories {
+		dataCategories = append(dataCategories, PrivacyDataCategories(dataCategory))
+	}
+
+	var purposes []PrivacyPurpose
+	for _, purpose := range pt.Purposes {
+		purposes = append(purposes, purpose.convert())
+	}
+
+	return PrivacyType{
+		Identifier:     pt.Identifier,
+		DataCategories: dataCategories,
+		Purposes:       purposes,
+	}
+}
+
+type rawPrivacyDataCategories struct {
+	Identifier string   `json:"identifier"`
+	DataTypes  []string `json:"dataTypes"`
+}
+
+type rawPrivacyPurpose struct {
+	Identifier     string                     `json:"identifier"`
+	DataCategories []rawPrivacyDataCategories `json:"dataCategories"`
+}
+
+func (pp *rawPrivacyPurpose) convert() PrivacyPurpose {
+	var dataCategories []PrivacyDataCategories
+	for _, dataCategory := range pp.DataCategories {
+		dataCategories = append(dataCategories, PrivacyDataCategories(dataCategory))
+	}
+
+	return PrivacyPurpose{
+		Identifier:     pp.Identifier,
+		DataCategories: dataCategories,
+	}
 }
