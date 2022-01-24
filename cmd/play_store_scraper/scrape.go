@@ -70,91 +70,82 @@ func Scrape(ctx context.Context, db *sql.DB, numScrapers int) error {
 	)
 	progress.RenderBlank()
 
-	scrapedAppIn := make(chan ScrapedApp)
-	notFoundAppIn := make(chan string)
-
-	scrapedAppOut := make(chan ScrapedApp)
-	notFoundAppOut := make(chan string)
-
-	errgrp, ctx := errgroup.WithContext(ctx)
-
-	// Update the progress bar
-	errgrp.Go(func() error {
-		for {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-
-			case scrapedApp, more := <-scrapedAppIn:
-				if !more {
-					close(scrapedAppOut)
-					return nil
-				}
-				progress.Add(1)
-				progress.Describe(scrapedApp.AppId)
-				select {
-				case <-ctx.Done():
-					return ctx.Err()
-				case scrapedAppOut <- scrapedApp:
-				}
-
-			case notFound, more := <-notFoundAppIn:
-				if !more {
-					close(notFoundAppOut)
-					return nil
-				}
-				progress.Add(1)
-				progress.Describe(notFound)
-				select {
-				case <-ctx.Done():
-					return ctx.Err()
-				case notFoundAppOut <- notFound:
-				}
-			}
+	for {
+		// Get apps to scrape
+		progress.Describe("Getting apps to scrape...")
+		appIds, err := appsToScrape(ctx, db, QueueSize)
+		if err != nil {
+			return err
 		}
-	})
 
-	errgrp.Go(func() error {
-		return Writer(ctx, db, scrapedAppOut, notFoundAppOut)
-	})
+		if len(appIds) == 0 {
+			return nil
+		}
 
-	errgrp.Go(func() error {
-		for {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			default:
-			}
+		scrapedAppIn := make(chan ScrapedApp)
+		notFoundAppIn := make(chan string)
 
-			// Get apps to scrape
-			progress.Describe("Getting apps to scrape...")
-			appIds, err := appsToScrape(ctx, db, QueueSize)
-			if err != nil {
-				return err
-			}
+		scrapedAppOut := make(chan ScrapedApp)
+		notFoundAppOut := make(chan string)
 
-			if len(appIds) == 0 {
-				// Tell the database writer that we have finished
-				close(scrapedAppIn)
-				close(notFoundAppIn)
-				return nil
-			}
+		errgrp, ctx := errgroup.WithContext(ctx)
 
-			progress.Describe("Scraping...")
-			errgrp, ctx := errgroup.WithContext(ctx)
-			toScrape := make(chan string, numScrapers)
+		// Update the progress bar
+		errgrp.Go(func() error {
+			for {
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
 
-			errgrp.Go(func() error {
-				for _, appId := range appIds {
+				case scrapedApp, more := <-scrapedAppIn:
+					if !more {
+						close(scrapedAppOut)
+						return nil
+					}
+					progress.Add(1)
+					progress.Describe(scrapedApp.AppId)
 					select {
 					case <-ctx.Done():
 						return ctx.Err()
-					case toScrape <- appId:
+					case scrapedAppOut <- scrapedApp:
+					}
+
+				case notFound, more := <-notFoundAppIn:
+					if !more {
+						close(notFoundAppOut)
+						return nil
+					}
+					progress.Add(1)
+					progress.Describe(notFound)
+					select {
+					case <-ctx.Done():
+						return ctx.Err()
+					case notFoundAppOut <- notFound:
 					}
 				}
-				close(toScrape)
-				return nil
-			})
+			}
+		})
+
+		errgrp.Go(func() error {
+			return Writer(ctx, db, scrapedAppOut, notFoundAppOut)
+		})
+
+		toScrape := make(chan string, numScrapers)
+
+		errgrp.Go(func() error {
+			for _, appId := range appIds {
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case toScrape <- appId:
+				}
+			}
+			close(toScrape)
+			return nil
+		})
+
+		errgrp.Go(func() error {
+			errgrp, ctx := errgroup.WithContext(ctx)
 
 			// Spawn a number of worker goroutines
 			for i := 0; i < numScrapers; i++ {
@@ -197,10 +188,18 @@ func Scrape(ctx context.Context, db *sql.DB, numScrapers int) error {
 			if err := errgrp.Wait(); err != nil {
 				return err
 			}
-		}
-	})
 
-	return errgrp.Wait()
+			// Closing these channels shuts down the other goroutines cleanly
+			close(scrapedAppIn)
+			close(notFoundAppIn)
+
+			return nil
+		})
+
+		if err := errgrp.Wait(); err != nil {
+			return err
+		}
+	}
 }
 
 func appsToScrape(ctx context.Context, db *sql.DB, n int) ([]string, error) {

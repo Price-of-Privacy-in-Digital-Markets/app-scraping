@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 
 	"github.com/andybalholm/brotli"
-	"github.com/mattn/go-sqlite3"
 )
 
 type preparedStatements struct {
@@ -48,25 +47,16 @@ func Writer(ctx context.Context, db *sql.DB, scrapedC <-chan ScrapedApp, notFoun
 	defer insertPriceStmt.Close()
 	stmts.InsertPrice = insertPriceStmt
 
-Loop:
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-
-		// FIXME: There is a bit of a race condition where we fetch new apps to scrape before apps
-		// in the previous queue have not been written, which triggers the unique constraint in the
-		// database when it is written for the second time.
 
 		case scrapedApp, more := <-scrapedC:
 			if !more {
 				return nil
 			}
 			if err := insertScrapedApps(ctx, db, &stmts, scrapedApp); err != nil {
-				err, ok := err.(sqlite3.Error)
-				if ok && err.ExtendedCode == sqlite3.ErrConstraintUnique {
-					continue Loop
-				}
 				return err
 			}
 
@@ -75,10 +65,6 @@ Loop:
 				return nil
 			}
 			if err := insertNotFoundApp(ctx, db, &stmts, notFound); err != nil {
-				err, ok := err.(sqlite3.Error)
-				if ok && err.ExtendedCode == sqlite3.ErrConstraintUnique {
-					continue Loop
-				}
 				return err
 			}
 		}
