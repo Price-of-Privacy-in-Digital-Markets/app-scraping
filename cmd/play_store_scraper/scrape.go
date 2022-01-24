@@ -26,10 +26,10 @@ type ScrapedApp struct {
 	playstore.Details
 	Permissions []playstore.Permission `json:"permissions"`
 	SimilarApps []playstore.SimilarApp `json:"similar"`
+	prices      []PriceInfo
 }
 
 type PriceInfo struct {
-	AppId         string
 	Country       string
 	Available     bool
 	Currency      string
@@ -72,11 +72,9 @@ func Scrape(ctx context.Context, db *sql.DB, numScrapers int) error {
 
 	scrapedAppIn := make(chan ScrapedApp)
 	notFoundAppIn := make(chan string)
-	pricesIn := make(chan []PriceInfo)
 
 	scrapedAppOut := make(chan ScrapedApp)
 	notFoundAppOut := make(chan string)
-	pricesOut := make(chan []PriceInfo)
 
 	errgrp, ctx := errgroup.WithContext(ctx)
 
@@ -112,23 +110,12 @@ func Scrape(ctx context.Context, db *sql.DB, numScrapers int) error {
 					return ctx.Err()
 				case notFoundAppOut <- notFound:
 				}
-
-			case prices, more := <-pricesIn:
-				if !more {
-					close(pricesOut)
-					return nil
-				}
-				select {
-				case <-ctx.Done():
-					return ctx.Err()
-				case pricesOut <- prices:
-				}
 			}
 		}
 	})
 
 	errgrp.Go(func() error {
-		return Writer(ctx, db, scrapedAppOut, notFoundAppOut, pricesOut)
+		return Writer(ctx, db, scrapedAppOut, notFoundAppOut)
 	})
 
 	errgrp.Go(func() error {
@@ -141,7 +128,7 @@ func Scrape(ctx context.Context, db *sql.DB, numScrapers int) error {
 
 			// Get apps to scrape
 			progress.Describe("Getting apps to scrape...")
-			appIds, err := appsToScrape(ctx, db, Days, QueueSize)
+			appIds, err := appsToScrape(ctx, db, QueueSize)
 			if err != nil {
 				return err
 			}
@@ -150,7 +137,6 @@ func Scrape(ctx context.Context, db *sql.DB, numScrapers int) error {
 				// Tell the database writer that we have finished
 				close(scrapedAppIn)
 				close(notFoundAppIn)
-				close(pricesIn)
 				return nil
 			}
 
@@ -183,7 +169,7 @@ func Scrape(ctx context.Context, db *sql.DB, numScrapers int) error {
 								return nil
 							}
 
-							if err := ScrapeApp(ctx, client, scrapedAppIn, notFoundAppIn, pricesIn, scrapeConfig, appId); err != nil {
+							if err := ScrapeApp(ctx, client, scrapedAppIn, notFoundAppIn, scrapeConfig, appId); err != nil {
 								if errors.Is(err, context.Canceled) {
 									return err
 								}
@@ -217,27 +203,19 @@ func Scrape(ctx context.Context, db *sql.DB, numScrapers int) error {
 	return errgrp.Wait()
 }
 
-func appsToScrape(ctx context.Context, db *sql.DB, days int, n int) ([]string, error) {
+func appsToScrape(ctx context.Context, db *sql.DB, n int) ([]string, error) {
 	const query = `
 	SELECT
 		app_id
-	FROM (
-		SELECT
-			apps.app_id AS app_id,
-			max(coalesce(scraped_when, 0), coalesce(not_found_when, 0)) AS scraped_last
-		FROM apps
-		LEFT JOIN scraped_apps ON apps.app_id = scraped_apps.app_id
-		LEFT JOIN not_found_apps ON apps.app_id = not_found_apps.app_id
-	)
-	GROUP BY app_id
-	HAVING
-		max(scraped_last) < CAST(strftime('%s', 'now', '-'||?||' days') AS INTEGER)
-	LIMIT ?;
-	`
+	FROM
+		apps
+	WHERE
+		(app_id NOT IN (SELECT app_id FROM scraped_apps)) AND (app_id NOT IN (SELECT app_id FROM not_found_apps))
+	LIMIT ?`
 
 	var appIds []string
 
-	rows, err := db.QueryContext(ctx, query, days, n)
+	rows, err := db.QueryContext(ctx, query, n)
 	if err != nil {
 		return nil, err
 	}
@@ -258,7 +236,7 @@ func appsToScrape(ctx context.Context, db *sql.DB, days int, n int) ([]string, e
 	return appIds, nil
 }
 
-func ScrapeApp(ctx context.Context, client *http.Client, scrapedC chan<- ScrapedApp, notFoundC chan<- string, pricesC chan<- []PriceInfo, config ScrapeConfig, appId string) error {
+func ScrapeApp(ctx context.Context, client *http.Client, scrapedC chan<- ScrapedApp, notFoundC chan<- string, config ScrapeConfig, appId string) error {
 	// Fire off a number of requests simultaneously for details, similar apps and permissions
 	errgrp, scrapeCtx := errgroup.WithContext(ctx)
 
@@ -308,35 +286,33 @@ func ScrapeApp(ctx context.Context, client *http.Client, scrapedC chan<- Scraped
 		return err
 	}
 
-	scrapedApp := ScrapedApp{
-		Details:     <-detailsC,
-		SimilarApps: <-similarC,
-		Permissions: <-permissionsC,
-	}
+	details := <-detailsC
+	similar := <-similarC
+	permissions := <-permissionsC
+
+	var prices []PriceInfo
 
 	// Now check if the app is free or paid. If the app is paid (or there is a sale), then scrape price data for additional countries.
-	if scrapedApp.Price > 0 || scrapedApp.OriginalPrice.ValueOrZero() > 0 {
-		errgrp, scrapeCtx := errgroup.WithContext(ctx)
-
-		prices := make([]PriceInfo, 1+len(config.AdditionalCountriesForPrice))
+	if details.Price > 0 || details.OriginalPrice.ValueOrZero() > 0 {
+		prices = make([]PriceInfo, 1+len(config.AdditionalCountriesForPrice))
 
 		// Some apps don't have a valid currency but I think this is only free apps.
 		// Error if otherwise
-		if !scrapedApp.Currency.Valid {
+		if !details.Currency.Valid {
 			return fmt.Errorf("paid app does not have currency: %s", appId)
 		}
 
 		// Add price information for the primary country
 		prices[0] = PriceInfo{
-			AppId:         appId,
 			Country:       config.Country,
-			Available:     scrapedApp.Available,
-			Currency:      scrapedApp.Currency.String,
-			Price:         scrapedApp.Price,
-			OriginalPrice: scrapedApp.OriginalPrice,
+			Available:     details.Available,
+			Currency:      details.Currency.String,
+			Price:         details.Price,
+			OriginalPrice: details.OriginalPrice,
 		}
 
 		// Then scrape price information for the additional countries
+		errgrp, scrapeCtx := errgroup.WithContext(ctx)
 		for i, country := range config.AdditionalCountriesForPrice {
 			i, country := i, country
 			errgrp.Go(func() error {
@@ -356,7 +332,6 @@ func ScrapeApp(ctx context.Context, client *http.Client, scrapedC chan<- Scraped
 				}
 
 				prices[i+1] = PriceInfo{
-					AppId:         appId,
 					Country:       country,
 					Available:     details.Available,
 					Currency:      details.Currency.String,
@@ -371,12 +346,13 @@ func ScrapeApp(ctx context.Context, client *http.Client, scrapedC chan<- Scraped
 		if err := errgrp.Wait(); err != nil {
 			return err
 		}
+	}
 
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case pricesC <- prices:
-		}
+	scrapedApp := ScrapedApp{
+		Details:     details,
+		SimilarApps: similar,
+		Permissions: permissions,
+		prices:      prices,
 	}
 
 	select {

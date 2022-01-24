@@ -7,17 +7,17 @@ import (
 	"encoding/json"
 
 	"github.com/andybalholm/brotli"
+	"github.com/mattn/go-sqlite3"
 )
 
 type preparedStatements struct {
 	InsertApp        *sql.Stmt
-	InsertBlob       *sql.Stmt
 	InsertScrapedApp *sql.Stmt
 	InsertNotFound   *sql.Stmt
 	InsertPrice      *sql.Stmt
 }
 
-func Writer(ctx context.Context, db *sql.DB, scrapedC <-chan ScrapedApp, notFoundC <-chan string, pricesC <-chan []PriceInfo) error {
+func Writer(ctx context.Context, db *sql.DB, scrapedC <-chan ScrapedApp, notFoundC <-chan string) error {
 	stmts := preparedStatements{}
 
 	insertAppStmt, err := db.PrepareContext(ctx, "INSERT INTO apps (app_id) VALUES (?) ON CONFLICT DO NOTHING")
@@ -27,14 +27,7 @@ func Writer(ctx context.Context, db *sql.DB, scrapedC <-chan ScrapedApp, notFoun
 	defer insertAppStmt.Close()
 	stmts.InsertApp = insertAppStmt
 
-	insertBlobStmt, err := db.PrepareContext(ctx, "INSERT INTO blobs (data) VALUES (?)")
-	if err != nil {
-		return err
-	}
-	defer insertBlobStmt.Close()
-	stmts.InsertBlob = insertBlobStmt
-
-	insertScrapedAppStmt, err := db.PrepareContext(ctx, "INSERT INTO scraped_apps (app_id, blob_id) VALUES (?, last_insert_rowid())")
+	insertScrapedAppStmt, err := db.PrepareContext(ctx, "INSERT INTO scraped_apps (app_id, data) VALUES (?, ?)")
 	if err != nil {
 		return err
 	}
@@ -55,16 +48,25 @@ func Writer(ctx context.Context, db *sql.DB, scrapedC <-chan ScrapedApp, notFoun
 	defer insertPriceStmt.Close()
 	stmts.InsertPrice = insertPriceStmt
 
+Loop:
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
+
+		// FIXME: There is a bit of a race condition where we fetch new apps to scrape before apps
+		// in the previous queue have not been written, which triggers the unique constraint in the
+		// database when it is written for the second time.
 
 		case scrapedApp, more := <-scrapedC:
 			if !more {
 				return nil
 			}
 			if err := insertScrapedApps(ctx, db, &stmts, scrapedApp); err != nil {
+				err, ok := err.(sqlite3.Error)
+				if ok && err.ExtendedCode == sqlite3.ErrConstraintUnique {
+					continue Loop
+				}
 				return err
 			}
 
@@ -73,14 +75,10 @@ func Writer(ctx context.Context, db *sql.DB, scrapedC <-chan ScrapedApp, notFoun
 				return nil
 			}
 			if err := insertNotFoundApp(ctx, db, &stmts, notFound); err != nil {
-				return err
-			}
-
-		case prices, more := <-pricesC:
-			if !more {
-				return nil
-			}
-			if err := insertPrices(ctx, db, &stmts, prices); err != nil {
+				err, ok := err.(sqlite3.Error)
+				if ok && err.ExtendedCode == sqlite3.ErrConstraintUnique {
+					continue Loop
+				}
 				return err
 			}
 		}
@@ -116,12 +114,31 @@ func insertScrapedApps(ctx context.Context, db *sql.DB, stmts *preparedStatement
 		return err
 	}
 
-	if _, err := tx.StmtContext(ctx, stmts.InsertBlob).ExecContext(ctx, compressed.Bytes()); err != nil {
+	if _, err := tx.StmtContext(ctx, stmts.InsertScrapedApp).ExecContext(ctx, scrapedApp.AppId, compressed.Bytes()); err != nil {
 		return err
 	}
 
-	if _, err := tx.StmtContext(ctx, stmts.InsertScrapedApp).ExecContext(ctx, scrapedApp.AppId); err != nil {
-		return err
+	for _, priceInfo := range scrapedApp.prices {
+		// If an app is not available in a country, the price data is meaningless so skip it
+		if !priceInfo.Available {
+			continue
+		}
+
+		if _, err := tx.StmtContext(ctx, stmts.InsertApp).ExecContext(ctx, scrapedApp.AppId); err != nil {
+			return err
+		}
+
+		args := []interface{}{
+			sql.Named("app_id", scrapedApp.AppId),
+			sql.Named("country", priceInfo.Country),
+			sql.Named("currency", priceInfo.Currency),
+			sql.Named("price", priceInfo.Price),
+			sql.Named("original_price", priceInfo.OriginalPrice),
+		}
+
+		if _, err := tx.StmtContext(ctx, stmts.InsertPrice).ExecContext(ctx, args...); err != nil {
+			return err
+		}
 	}
 
 	return tx.Commit()
@@ -140,39 +157,6 @@ func insertNotFoundApp(ctx context.Context, db *sql.DB, stmts *preparedStatement
 
 	if _, err := tx.StmtContext(ctx, stmts.InsertNotFound).ExecContext(ctx, appId); err != nil {
 		return err
-	}
-
-	return tx.Commit()
-}
-
-func insertPrices(ctx context.Context, db *sql.DB, stmts *preparedStatements, prices []PriceInfo) error {
-	tx, err := db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-
-	for _, priceInfo := range prices {
-		// If an app is not available in a country, the price data is meaningless so skip it
-		if !priceInfo.Available {
-			continue
-		}
-
-		if _, err := tx.StmtContext(ctx, stmts.InsertApp).ExecContext(ctx, priceInfo.AppId); err != nil {
-			return err
-		}
-
-		args := []interface{}{
-			sql.Named("app_id", priceInfo.AppId),
-			sql.Named("country", priceInfo.Country),
-			sql.Named("currency", priceInfo.Currency),
-			sql.Named("price", priceInfo.Price),
-			sql.Named("original_price", priceInfo.OriginalPrice),
-		}
-
-		if _, err := tx.StmtContext(ctx, stmts.InsertPrice).ExecContext(ctx, args...); err != nil {
-			return err
-		}
 	}
 
 	return tx.Commit()

@@ -17,7 +17,6 @@ import (
 
 const (
 	DatabaseVersion uint8 = 2
-	Days            int   = 7
 	QueueSize       int   = 1_000
 )
 
@@ -127,21 +126,6 @@ func main() {
 	}
 	scrapeCmd.Flags().IntVar(&numScrapers, "num-scrapers", 20, "Number of simultaneous scrapers")
 	rootCmd.AddCommand(scrapeCmd)
-
-	var exportPath string
-
-	exportCmd := &cobra.Command{
-		Use: "export",
-		Run: func(cmd *cobra.Command, args []string) {
-			if err := Export(ctx, db, exportPath); err != nil && !errors.Is(err, context.Canceled) {
-				log.Printf("%+v", err)
-			}
-		},
-	}
-	exportCmd.Flags().StringVar(&exportPath, "output", "", "Output file")
-	exportCmd.MarkFlagRequired("output")
-	exportCmd.MarkFlagRequired("country")
-	rootCmd.AddCommand(exportCmd)
 
 	rootCmd.Execute()
 }
