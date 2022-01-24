@@ -12,6 +12,7 @@ require (
 	github.com/tidwall/gjson v1.14.1
 	golang.org/x/net v0.0.0-20211112202133-69e39bad7dc2
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
+	golang.org/x/time v0.0.0-20191024005414-555d28b269f0
 	gopkg.in/guregu/null.v4 v4.0.0
 )
 
