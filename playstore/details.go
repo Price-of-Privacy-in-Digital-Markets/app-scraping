@@ -136,7 +136,6 @@ type Details struct {
 }
 
 type Histogram struct {
-	Stars0 json.Number `json:"0"`
 	Stars1 json.Number `json:"1"`
 	Stars2 json.Number `json:"2"`
 	Stars3 json.Number `json:"3"`
