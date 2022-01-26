@@ -106,8 +106,8 @@ type Details struct {
 	OriginalPrice            null.Float  `json:"original_price"`
 	SaleText                 null.String `json:"sale_text"`
 	Available                bool        `json:"available"`
-	OffersIAP                bool        `json:"offers_iap"`
-	IAPRange                 null.String `json:"iap_range"`
+	OffersIAP                bool        `json:"in_app_purchases"`
+	IAPRange                 null.String `json:"in_app_purchases_range"`
 	Size                     string      `json:"size"`
 	AndroidVersion           string      `json:"android_version"`
 	Developer                string      `json:"developer"`
