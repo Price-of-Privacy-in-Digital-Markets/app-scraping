@@ -116,7 +116,6 @@ type Details struct {
 	DeveloperWebsite         null.String `json:"developer_website"`
 	DeveloperAddress         null.String `json:"developer_address"`
 	PrivacyPolicy            null.String `json:"privacy_policy"`
-	DeveloperInternalID      string      `json:"developer_internal_id"`
 	Genre                    string      `json:"genre"`
 	GenreId                  string      `json:"genre_id"`
 	FamilyGenre              null.String `json:"family_genre"`
@@ -229,7 +228,6 @@ func ScrapeDetails(ctx context.Context, client *http.Client, appId string, count
 		DeveloperWebsite:         extract.Block("ds:5").OptionalString(0, 12, 5, 3, 5, 2),
 		DeveloperAddress:         extract.Block("ds:5").OptionalString(0, 12, 5, 4, 0),
 		PrivacyPolicy:            extract.Block("ds:5").OptionalString(0, 12, 7, 2),
-		DeveloperInternalID:      extract.Block("ds:5").String(0, 12, 5, 0, 0),
 		Genre:                    extract.Block("ds:5").String(0, 12, 13, 0, 0),
 		GenreId:                  extract.Block("ds:5").String(0, 12, 13, 0, 2),
 		FamilyGenre:              extract.Block("ds:5").OptionalString(0, 12, 13, 1, 0),
