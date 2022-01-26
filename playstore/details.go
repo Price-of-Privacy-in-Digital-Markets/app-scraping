@@ -19,9 +19,9 @@ import (
 )
 
 var (
-	AF_INIT_DATA_CALLBACK  = regexp.MustCompile(`AF_initDataCallback\(\{key:\s*'([a-zA-Z0-9:]+)',.*?data:\s*(.*?),\s*sideChannel:\s*\{\}\}\);`)
-	SERVICE_REQUEST_BODY   = regexp.MustCompile(`var AF_dataServiceRequests = \{(.*?)\};\s*var AF_initDataChunkQueue`)
-	SERVICE_REQUEST_KEY_ID = regexp.MustCompile(`'(ds:[0-9]+)'\s*:\s*\{.*?id\s*:\s*'([a-zA-Z0-9]+)'.*?\}`)
+	re_af_init_data_callback  = regexp.MustCompile(`AF_initDataCallback\(\{key:\s*'([a-zA-Z0-9:]+)',.*?data:\s*(.*?),\s*sideChannel:\s*\{\}\}\);`)
+	re_service_request_body   = regexp.MustCompile(`var AF_dataServiceRequests = \{(.*?)\};\s*var AF_initDataChunkQueue`)
+	re_service_request_key_id = regexp.MustCompile(`'(ds:[0-9]+)'\s*:\s*\{.*?id\s*:\s*'([a-zA-Z0-9]+)'.*?\}`)
 )
 
 func extractScriptData(body io.Reader) (dataMap map[string]interface{}, serviceRequestMap map[string]string, err error) {
@@ -56,7 +56,7 @@ func extractScriptData(body io.Reader) (dataMap map[string]interface{}, serviceR
 	serviceRequestMap = make(map[string]string)
 
 	for _, s := range scripts {
-		matches := AF_INIT_DATA_CALLBACK.FindAllStringSubmatch(s, -1)
+		matches := re_af_init_data_callback.FindAllStringSubmatch(s, -1)
 		for _, m := range matches {
 			key := m[1]
 			var data []interface{}
@@ -70,9 +70,9 @@ func extractScriptData(body io.Reader) (dataMap map[string]interface{}, serviceR
 			dataMap[key] = data
 		}
 
-		service_request_match := SERVICE_REQUEST_BODY.FindStringSubmatch(s)
+		service_request_match := re_service_request_body.FindStringSubmatch(s)
 		if service_request_match != nil {
-			matches := SERVICE_REQUEST_KEY_ID.FindAllStringSubmatch(service_request_match[1], -1)
+			matches := re_service_request_key_id.FindAllStringSubmatch(service_request_match[1], -1)
 			for _, m := range matches {
 				serviceRequestMap[m[2]] = m[1]
 			}
