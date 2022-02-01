@@ -103,6 +103,18 @@ func main() {
 	rootCmd.PersistentFlags().StringVar(&databasePath, "database", "", "Path to database")
 	rootCmd.MarkPersistentFlagRequired("database")
 
+	importCmd := &cobra.Command{
+		Use: "import",
+		Run: func(cmd *cobra.Command, args []string) {
+			if err := Import(ctx, db, args); err != nil && !errors.Is(err, context.Canceled) {
+				log.Printf("%+v", err)
+			}
+		},
+		Args: cobra.MinimumNArgs(1),
+	}
+	importCmd.MarkFlagRequired("input")
+	rootCmd.AddCommand(importCmd)
+
 	spiderCmd := &cobra.Command{
 		Use:   "spider",
 		Short: "Crawl the App Store to enumerate all the available apps",
