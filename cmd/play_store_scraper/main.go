@@ -100,18 +100,16 @@ func main() {
 	rootCmd.PersistentFlags().StringVar(&databasePath, "database", "", "Path to database")
 	rootCmd.MarkPersistentFlagRequired("database")
 
-	var inputPath string
 	importCmd := &cobra.Command{
 		Use: "import",
 		Run: func(cmd *cobra.Command, args []string) {
-			if err := Import(ctx, db, inputPath); err != nil && err != context.Canceled {
+			if err := Import(ctx, db, args); err != nil && !errors.Is(err, context.Canceled) {
 				log.Printf("%+v", err)
 			}
 		},
+		Args: cobra.MinimumNArgs(1),
 	}
-	importCmd.Flags().StringVar(&inputPath, "input", "", "Input file")
 	importCmd.MarkFlagRequired("input")
-
 	rootCmd.AddCommand(importCmd)
 
 	var numScrapers int
