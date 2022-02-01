@@ -243,7 +243,28 @@ func scrape(ctx context.Context, db *sql.DB) error {
 	progress := makeProgressBar(int(total), "apps")
 	progress.Set64(total - remaining)
 
+	client := makeHTTPClient()
+	defer client.CloseIdleConnections()
+	rateLimiter := rate.NewLimiter(rate.Every(RateLimit), 1)
+
+	// Get the JWT token so we can authenticate against the API
+	token, err := appstore.GetToken(ctx, client)
+	if err != nil {
+		return err
+	}
+
 	for {
+		// Get apps to scrape
+		progress.Describe("Getting apps to scrape")
+		appIds, err := appsToScrape(ctx, db, QueueSize)
+		if err != nil {
+			return err
+		}
+
+		if len(appIds) == 0 {
+			return nil
+		}
+
 		errgrp, ctx := errgroup.WithContext(ctx)
 
 		scrapedAppsIn := make(chan []ScrapedApp)
@@ -252,7 +273,29 @@ func scrape(ctx context.Context, db *sql.DB) error {
 		notFoundAppsIn := make(chan []appstore.AppId)
 		notFoundAppsOut := make(chan []appstore.AppId)
 
-		// Update the progress bar
+		toScrape := make(chan []appstore.AppId, NumWorkers)
+
+		// Goroutine to keep the scrape queue topped up
+		errgrp.Go(func() error {
+			chunks := chunks(appIds, ChunkSize)
+			for _, chunk := range chunks {
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case toScrape <- chunk:
+				}
+			}
+
+			close(toScrape)
+			return nil
+		})
+
+		// Database writer goroutine
+		errgrp.Go(func() error {
+			return Writer(ctx, db, nil, scrapedAppsOut, notFoundAppsOut)
+		})
+
+		// Goroutine to update the progress bar
 		errgrp.Go(func() error {
 		ProgressLoop:
 			for {
@@ -296,103 +339,57 @@ func scrape(ctx context.Context, db *sql.DB) error {
 			return nil
 		})
 
+		// Goroutine to manage the scraper workers
 		errgrp.Go(func() error {
-			return Writer(ctx, db, nil, scrapedAppsOut, notFoundAppsOut)
-		})
+			errgrp, ctx := errgroup.WithContext(ctx)
 
-		errgrp.Go(func() error {
-			client := makeHTTPClient()
-			defer client.CloseIdleConnections()
+			// Spawn a number of scraper goroutines
+			for i := 0; i < NumWorkers; i++ {
+				errgrp.Go(func() error {
+					for {
+						select {
+						case <-ctx.Done():
+							return ctx.Err()
+						case appIds, ok := <-toScrape:
+							if !ok {
+								return nil
+							}
 
-			rateLimiter := rate.NewLimiter(rate.Every(RateLimit), 1)
+							if err := Scrape(ctx, client, progress, rateLimiter, token, scrapedAppsIn, notFoundAppsIn, appIds); err != nil {
+								// Is this a fatal error or shall we ignore it?
 
-			// Get the JWT token so we can authenticate against the API
-			token, err := appstore.GetToken(ctx, client)
-			if err != nil {
+								if errors.Is(err, context.Canceled) {
+									return err
+								}
+
+								var errNetwork net.Error
+								if errors.As(err, &errNetwork) {
+									log.Print("Network error: ", errNetwork)
+									continue
+								}
+
+								return err
+							}
+						}
+					}
+				})
+			}
+
+			if err := errgrp.Wait(); err != nil {
 				return err
 			}
 
-			for {
-				// Get apps to scrape
-				progress.Describe("Getting apps to scrape")
-				appIds, err := appsToScrape(ctx, db, QueueSize)
-				if err != nil {
-					return err
-				}
+			// Closing these channels shuts down the other goroutines cleanly
+			close(scrapedAppsIn)
+			close(notFoundAppsIn)
 
-				if len(appIds) == 0 {
-					close(scrapedAppsIn)
-					close(notFoundAppsIn)
-					return nil
-				}
-
-				scrapeErrGrp, scrapeCtx := errgroup.WithContext(ctx)
-				toScrape := make(chan []appstore.AppId, NumWorkers)
-
-				// Spawn a goroutine to keep the scrape queue topped up
-				scrapeErrGrp.Go(func() error {
-					chunks := chunks(appIds, ChunkSize)
-					for _, chunk := range chunks {
-						select {
-						case <-scrapeCtx.Done():
-							return scrapeCtx.Err()
-						case toScrape <- chunk:
-						}
-					}
-
-					close(toScrape)
-					return nil
-				})
-
-				// Spawn a number of scraper goroutines
-				for i := 0; i < NumWorkers; i++ {
-					scrapeErrGrp.Go(func() error {
-						for {
-							select {
-							case <-scrapeCtx.Done():
-								return scrapeCtx.Err()
-							case appIds, ok := <-toScrape:
-								if !ok {
-									return nil
-								}
-
-								if err := Scrape(scrapeCtx, client, progress, rateLimiter, token, scrapedAppsIn, notFoundAppsIn, appIds); err != nil {
-									// Is this a fatal error or shall we ignore it?
-
-									if errors.Is(err, context.Canceled) {
-										return err
-									}
-
-									var errNetwork net.Error
-									if errors.As(err, &errNetwork) {
-										log.Print("Network error: ", errNetwork)
-										continue
-									}
-
-									return err
-								}
-							}
-						}
-					})
-				}
-
-				if err := scrapeErrGrp.Wait(); err != nil {
-					return err
-				}
-
-				// Closing these channels shuts down the other goroutines cleanly
-				close(scrapedAppsIn)
-				close(notFoundAppsIn)
-
-				return nil
-			}
+			return nil
 		})
 
 		if err := errgrp.Wait(); err != nil {
 			return err
 		}
 	}
-
 }
 
 func dbStatistics(ctx context.Context, db *sql.DB) (total int64, remaining int64, err error) {
