@@ -16,10 +16,11 @@ CREATE TABLE IF NOT EXISTS not_found_apps (
 );
 
 CREATE TABLE IF NOT EXISTS prices (
+    scraped_when   INTEGER NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS INTEGER)),
     app_id         TEXT NOT NULL REFERENCES apps(app_id),
-    country        TEXT NOT NULL,
+    country        TEXT NOT NULL CHECK (lower(country) = country),
     currency       TEXT NOT NULL,
-    price          REAL NOT NULL,
+    price          REAL NOT NULL CHECK (price >= 0),
     original_price REAL,
     PRIMARY KEY (app_id, country)
 );
