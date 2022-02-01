@@ -1,6 +1,6 @@
 CREATE TABLE IF NOT EXISTS apps (
     app_id      INT PRIMARY KEY NOT NULL
-);
+) WITHOUT ROWID;
 
 CREATE TABLE IF NOT EXISTS scraped_apps (
     scrape_id    INTEGER PRIMARY KEY,
