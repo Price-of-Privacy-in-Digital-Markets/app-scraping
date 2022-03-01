@@ -48,7 +48,7 @@ func Scrape(ctx context.Context, db *sql.DB, numScrapers int) error {
 	// http://tleyden.github.io/blog/2016/11/21/tuning-the-go-http-client-library-for-load-testing/
 	retryableClient := retryablehttp.NewClient()
 	retryableClient.Logger = nil
-	retryableClient.HTTPClient.Timeout = time.Second * 30
+	retryableClient.HTTPClient.Timeout = time.Second * 10
 	retryableClient.RetryMax = 10
 	retryableClient.HTTPClient.Transport.(*http.Transport).MaxIdleConns = 100
 	retryableClient.HTTPClient.Transport.(*http.Transport).MaxIdleConnsPerHost = 100
