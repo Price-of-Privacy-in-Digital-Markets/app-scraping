@@ -74,7 +74,6 @@ func Scrape(ctx context.Context, db *sql.DB, numScrapers int) error {
 	)
 	progress.RenderBlank()
 	progress.Set64(total - remaining)
-	progress.Reset()
 
 	for {
 		// Get apps to scrape
