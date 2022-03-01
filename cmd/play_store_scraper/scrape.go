@@ -55,8 +55,13 @@ func Scrape(ctx context.Context, db *sql.DB, numScrapers int) error {
 	defer retryableClient.HTTPClient.CloseIdleConnections()
 	client := retryableClient.StandardClient()
 
-	progress := progressbar.NewOptions(
-		-1,
+	total, remaining, err := dbStatistics(ctx, db)
+	if err != nil {
+		return err
+	}
+
+	progress := progressbar.NewOptions64(
+		total,
 		progressbar.OptionSetWriter(os.Stderr),
 		progressbar.OptionThrottle(100*time.Millisecond),
 		progressbar.OptionShowIts(),
@@ -69,17 +74,24 @@ func Scrape(ctx context.Context, db *sql.DB, numScrapers int) error {
 		progressbar.OptionUseANSICodes(false),
 	)
 	progress.RenderBlank()
+	progress.Set64(total - remaining)
 
 	for {
 		// Get apps to scrape
 		progress.Describe("Getting apps to scrape...")
-		appIds, err := appsToScrape(ctx, db, QueueSize)
+		total, remaining, err := dbStatistics(ctx, db)
 		if err != nil {
 			return err
 		}
+		progress.ChangeMax64(total)
 
-		if len(appIds) == 0 {
+		if remaining == 0 {
 			return nil
+		}
+
+		appIds, err := appsToScrape(ctx, db, QueueSize)
+		if err != nil {
+			return err
 		}
 
 		scrapedAppIn := make(chan ScrapedApp)
@@ -206,6 +218,29 @@ func Scrape(ctx context.Context, db *sql.DB, numScrapers int) error {
 			return err
 		}
 	}
+}
+
+func dbStatistics(ctx context.Context, db *sql.DB) (total int64, remaining int64, err error) {
+	if err = db.QueryRowContext(ctx, `SELECT COUNT(*) FROM apps`).Scan(&total); err != nil {
+		return
+	}
+
+	const query = `
+	SELECT COUNT(*)
+	FROM (
+		SELECT
+			app_id
+		FROM
+			apps
+		WHERE
+			(app_id NOT IN (SELECT app_id FROM scraped_apps)) AND (app_id NOT IN (SELECT app_id FROM not_found_apps))
+	)`
+
+	if err = db.QueryRowContext(ctx, query).Scan(&remaining); err != nil {
+		return
+	}
+
+	return
 }
 
 func appsToScrape(ctx context.Context, db *sql.DB, n int) ([]string, error) {
