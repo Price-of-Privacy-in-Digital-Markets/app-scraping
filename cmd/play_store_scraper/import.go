@@ -7,6 +7,8 @@ import (
 	"log"
 	"os"
 	"strings"
+
+	"github.com/mattn/go-sqlite3"
 )
 
 func Import(ctx context.Context, db *sql.DB, inputFilePaths []string) error {
@@ -52,6 +54,9 @@ func importAppIds(ctx context.Context, db *sql.DB, inputFilePath string) (int64,
 		appId := strings.TrimSpace(scanner.Text())
 
 		if _, err := insertApp.ExecContext(ctx, appId); err != nil {
+			if err := err.(sqlite3.Error); err.ExtendedCode == sqlite3.ErrConstraintCheck {
+				continue
+			}
 			return 0, err
 		}
 
