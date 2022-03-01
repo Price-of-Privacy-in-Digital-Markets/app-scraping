@@ -178,6 +178,12 @@ func Scrape(ctx context.Context, db *sql.DB, numScrapers int) error {
 									continue MainLoop
 								}
 
+								var errExtractSimilar *playstore.SimilarAppsExtractError
+								if errors.As(err, &errExtractSimilar) {
+									log.Print(errExtractSimilar)
+									continue MainLoop
+								}
+
 								return err
 							}
 						}
