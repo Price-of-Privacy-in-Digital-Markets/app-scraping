@@ -64,6 +64,7 @@ func Scrape(ctx context.Context, db *sql.DB, numScrapers int) error {
 		total,
 		progressbar.OptionSetWriter(os.Stderr),
 		progressbar.OptionThrottle(100*time.Millisecond),
+		progressbar.OptionShowCount(),
 		progressbar.OptionShowIts(),
 		progressbar.OptionSetItsString("apps"),
 		progressbar.OptionOnCompletion(func() {
