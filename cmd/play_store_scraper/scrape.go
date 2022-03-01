@@ -69,16 +69,15 @@ func Scrape(ctx context.Context, db *sql.DB, numScrapers int) error {
 		progressbar.OptionOnCompletion(func() {
 			fmt.Fprint(os.Stderr, "\n")
 		}),
-		progressbar.OptionSpinnerType(14),
 		progressbar.OptionFullWidth(),
-		progressbar.OptionUseANSICodes(false),
+		progressbar.OptionUseANSICodes(true),
 	)
 	progress.RenderBlank()
 	progress.Set64(total - remaining)
+	progress.Reset()
 
 	for {
 		// Get apps to scrape
-		progress.Describe("Getting apps to scrape...")
 		total, remaining, err := dbStatistics(ctx, db)
 		if err != nil {
 			return err
@@ -115,7 +114,6 @@ func Scrape(ctx context.Context, db *sql.DB, numScrapers int) error {
 						return nil
 					}
 					progress.Add(1)
-					progress.Describe(scrapedApp.AppId)
 					select {
 					case <-ctx.Done():
 						return ctx.Err()
@@ -128,7 +126,6 @@ func Scrape(ctx context.Context, db *sql.DB, numScrapers int) error {
 						return nil
 					}
 					progress.Add(1)
-					progress.Describe(notFound)
 					select {
 					case <-ctx.Done():
 						return ctx.Err()
