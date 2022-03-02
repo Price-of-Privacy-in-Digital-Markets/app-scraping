@@ -120,7 +120,7 @@ type Details struct {
 	GenreId                  string      `json:"genre_id"`
 	FamilyGenre              null.String `json:"family_genre"`
 	FamilyGenreId            null.String `json:"family_genre_id"`
-	Icon                     string      `json:"icon"`
+	Icon                     null.String `json:"icon"`
 	HeaderImage              null.String `json:"header_image"`
 	Screenshots              []string    `json:"screenshots"`
 	Video                    null.String `json:"video"`
@@ -231,7 +231,7 @@ func ScrapeDetails(ctx context.Context, client *http.Client, appId string, count
 		GenreId:                  extract.Block("ds:5").String(0, 12, 13, 0, 2),
 		FamilyGenre:              extract.Block("ds:5").OptionalString(0, 12, 13, 1, 0),
 		FamilyGenreId:            extract.Block("ds:5").OptionalString(0, 12, 13, 1, 2),
-		Icon:                     extract.Block("ds:5").String(0, 12, 1, 3, 2),
+		Icon:                     extract.Block("ds:5").OptionalString(0, 12, 1, 3, 2),
 		HeaderImage:              extract.Block("ds:5").OptionalString(0, 12, 2, 3, 2),
 		Screenshots:              screenshots(extract.Block("ds:5").Json(0, 12, 0), extract.Error),
 		Video:                    extract.Block("ds:5").OptionalString(0, 12, 3, 0, 3, 2),
