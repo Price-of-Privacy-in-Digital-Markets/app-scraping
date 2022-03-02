@@ -177,7 +177,7 @@ func (e *blockExtractor) String(path ...int) string {
 
 	switch val := val.(type) {
 	case string:
-		return val
+		return strings.ReplaceAll(val, "\x00", "")
 	default:
 		e.error("String", "wrong type", path)
 		return ""
@@ -191,7 +191,7 @@ func (e *blockExtractor) OptionalString(path ...int) null.String {
 	case nil:
 		return null.String{}
 	case string:
-		return null.StringFrom(val)
+		return null.StringFrom(strings.ReplaceAll(val, "\x00", ""))
 	default:
 		e.error("OptionalString", "wrong type", path)
 		return null.String{}
