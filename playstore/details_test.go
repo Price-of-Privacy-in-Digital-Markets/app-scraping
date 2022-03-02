@@ -53,7 +53,7 @@ func TestScrapeDetails(t *testing.T) {
 	assert.False(t, details.FamilyGenre.Valid)
 	assert.False(t, details.FamilyGenreId.Valid)
 
-	assert.Equal(t, "4.4 and up", details.AndroidVersion)
+	assert.Equal(t, "7.0 and up", details.AndroidVersion)
 	assert.Equal(t, "Free", details.PriceText)
 	assert.Equal(t, 0.0, details.Price)
 	assert.True(t, details.AdSupported)
