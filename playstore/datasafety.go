@@ -209,7 +209,7 @@ func ScrapeDataSafety(ctx context.Context, client *http.Client, appId string) (*
 
 	dataSafety := &DataSafety{}
 
-	if title := strings.TrimSpace(dataSafetyRaw.Get("0.1").String()); !(title == "Data shared with third parties" || title == "No data shared with third parties") {
+	if title := strings.TrimSpace(dataSafetyRaw.Get("0.1").String()); !(title == "Data shared" || title == "No data shared with third parties") {
 		return nil, fmt.Errorf("unexpected data sharing title: %s", title)
 	}
 	if value := dataSafetyRaw.Get("0.0"); value.Exists() {
@@ -231,13 +231,14 @@ func ScrapeDataSafety(ctx context.Context, client *http.Client, appId string) (*
 
 	// Security practices
 	rawSecurityPractices := gjson.Get(envelopes[0].Payload, "1.2.137.9")
+	if rawSecurityPractices.Exists() {
+		if title := rawSecurityPractices.Get("1").String(); title != "Security practices" {
+			return nil, fmt.Errorf("invalid security practices title: %s", title)
+		}
 
-	if title := rawSecurityPractices.Get("1").String(); title != "Security practices" {
-		return nil, fmt.Errorf("invalid security practices title: %s", title)
-	}
-
-	for _, practice := range rawSecurityPractices.Get("2.#.1").Array() {
-		dataSafety.SecurityPractices = append(dataSafety.SecurityPractices, practice.String())
+		for _, practice := range rawSecurityPractices.Get("2.#.1").Array() {
+			dataSafety.SecurityPractices = append(dataSafety.SecurityPractices, practice.String())
+		}
 	}
 
 	return dataSafety, nil

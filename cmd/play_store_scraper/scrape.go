@@ -26,6 +26,7 @@ type ScrapedApp struct {
 	playstore.Details
 	Permissions []playstore.Permission `json:"permissions"`
 	SimilarApps []playstore.SimilarApp `json:"similar"`
+	DataSafety  *playstore.DataSafety  `json:"data_safety"`
 	prices      []PriceInfo
 }
 
@@ -310,6 +311,17 @@ func ScrapeApp(ctx context.Context, client *http.Client, scrapedC chan<- Scraped
 		return nil
 	})
 
+	dataSafetyC := make(chan *playstore.DataSafety, 1)
+	errgrp.Go(func() error {
+		dataSafety, err := playstore.ScrapeDataSafety(scrapeCtx, client, appId)
+		if err != nil {
+			return fmt.Errorf("cannot scrape data safety of app %s: %w", appId, err)
+		}
+
+		dataSafetyC <- dataSafety
+		return nil
+	})
+
 	if err := errgrp.Wait(); err != nil {
 		if errors.Is(err, playstore.ErrAppNotFound) {
 			select {
@@ -326,6 +338,7 @@ func ScrapeApp(ctx context.Context, client *http.Client, scrapedC chan<- Scraped
 	details := <-detailsC
 	similar := <-similarC
 	permissions := <-permissionsC
+	dataSafety := <-dataSafetyC
 
 	var prices []PriceInfo
 
@@ -389,6 +402,7 @@ func ScrapeApp(ctx context.Context, client *http.Client, scrapedC chan<- Scraped
 		Details:     details,
 		SimilarApps: similar,
 		Permissions: permissions,
+		DataSafety:  dataSafety,
 		prices:      prices,
 	}
 
