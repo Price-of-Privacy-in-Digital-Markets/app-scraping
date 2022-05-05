@@ -15,6 +15,8 @@ func TestDataSafety(t *testing.T) {
 	}
 
 	assert.NotNil(t, dataSafety)
+
+	assert.Equal(t, []DataCategory{}, dataSafety.Sharing)
 }
 
 func TestDataSafetyAppDoesNotExist(t *testing.T) {

@@ -207,7 +207,7 @@ func ScrapeDataSafety(ctx context.Context, client *http.Client, appId string) (*
 		return nil, nil
 	}
 
-	dataSafety := &DataSafety{}
+	var dataSafety DataSafety
 
 	if title := strings.TrimSpace(dataSafetyRaw.Get("0.1").String()); !(title == "Data shared" || title == "No data shared with third parties") {
 		return nil, fmt.Errorf("unexpected data sharing title: %s", title)
@@ -216,6 +216,9 @@ func ScrapeDataSafety(ctx context.Context, client *http.Client, appId string) (*
 		// App shares data with third parties
 		if err := json.Unmarshal([]byte(value.Raw), &dataSafety.Sharing); err != nil {
 			return nil, err
+		}
+		if dataSafety.Sharing == nil {
+			dataSafety.Sharing = []DataCategory{}
 		}
 	}
 
@@ -226,6 +229,9 @@ func ScrapeDataSafety(ctx context.Context, client *http.Client, appId string) (*
 		// App collects data
 		if err := json.Unmarshal([]byte(value.Raw), &dataSafety.Collection); err != nil {
 			return nil, err
+		}
+		if dataSafety.Collection == nil {
+			dataSafety.Collection = []DataCategory{}
 		}
 	}
 
@@ -239,7 +245,9 @@ func ScrapeDataSafety(ctx context.Context, client *http.Client, appId string) (*
 		for _, practice := range rawSecurityPractices.Get("2.#.1").Array() {
 			dataSafety.SecurityPractices = append(dataSafety.SecurityPractices, practice.String())
 		}
+	} else {
+		dataSafety.SecurityPractices = []string{}
 	}
 
-	return dataSafety, nil
+	return &dataSafety, nil
 }
