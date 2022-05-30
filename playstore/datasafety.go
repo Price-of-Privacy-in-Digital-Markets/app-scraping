@@ -1,13 +1,10 @@
 package playstore
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
-	"net/url"
 	"strings"
 
 	"github.com/tidwall/gjson"
@@ -96,112 +93,23 @@ func (dt *DataType) UnmarshalJSON(p []byte) error {
 	return nil
 }
 
-type envelope struct {
-	RpcId   string
-	Payload string
+type dataSafetyRequester struct {
+	AppId string
 }
 
-// TODO:
-// Different envelopes I have seem are:
-// wrb.fr - response
-// di
-// af.httprm
-// https://kovatch.medium.com/deciphering-google-batchexecute-74991e4e446c
-func respToEnvelopes(body []byte) ([]envelope, error) {
-	if !bytes.HasPrefix(body, []byte(")]}'\n\n")) {
-		return nil, fmt.Errorf("invalid response")
+func (br *dataSafetyRequester) BatchRequest() batchRequest {
+	return batchRequest{
+		RpcId:   "Ws7gDc",
+		Payload: fmt.Sprintf(`[null,null,[[1,69,70,96,100,138]],[[[true],null,[[[]]],null,null,null,null,[null,2],null,null,null,null,null,null,[1],null,null,null,null,null,null,null,[1]],[null,[[[]]]],[null,[[[]]],null,[true]],[null,[[[]]]],null,null,null,null,[[[[]]]],[[[[]]]]],null,[["%s",7]]]`, br.AppId),
 	}
-
-	body = bytes.TrimPrefix(body, []byte(")]}'\n\n"))
-
-	var wrapper [][]json.RawMessage
-	if err := json.Unmarshal(body, &wrapper); err != nil {
-		return nil, err
-	}
-
-	var envelopes []envelope
-	for _, rawEnvelope := range wrapper {
-		if len(rawEnvelope) == 7 {
-			var header string
-			var envelope envelope
-
-			if err := json.Unmarshal(rawEnvelope[0], &header); err != nil {
-				return nil, err
-			}
-			if header != "wrb.fr" {
-				return nil, fmt.Errorf("invalid header: %s", header)
-			}
-
-			if err := json.Unmarshal(rawEnvelope[1], &envelope.RpcId); err != nil {
-				return nil, err
-			}
-
-			if err := json.Unmarshal(rawEnvelope[2], &envelope.Payload); err != nil {
-				return nil, err
-			}
-			if envelope.Payload != "" && !gjson.Valid(envelope.Payload) {
-				return nil, fmt.Errorf("envelope has invalid JSON payload")
-			}
-
-			envelopes = append(envelopes, envelope)
-		}
-	}
-
-	return envelopes, nil
 }
 
-func ScrapeDataSafety(ctx context.Context, client *http.Client, appId string) (*DataSafety, error) {
-	const dataSafetyUrl = "https://play.google.com/_/PlayStoreUi/data/batchexecute"
-
-	form := url.Values{}
-	dataSafetyBody := fmt.Sprintf(`[[["Ws7gDc","[null,null,[[1,69,70,96,100,138]],[[[true],null,[[[]]],null,null,null,null,[null,2],null,null,null,null,null,null,[1],null,null,null,null,null,null,null,[1]],[null,[[[]]]],[null,[[[]]],null,[true]],[null,[[[]]]],null,null,null,null,[[[[]]]],[[[[]]]]],null,[[\"%s\",7]]]",null,"1"]]]`, appId)
-	form.Set("f.req", dataSafetyBody)
-
-	req, err := http.NewRequestWithContext(ctx, "POST", dataSafetyUrl, strings.NewReader(form.Encode()))
-	if err != nil {
-		return nil, err
-	}
-
-	// Build the URL
-	params := req.URL.Query()
-	params.Add("rpcids", "Ws7gDc")
-	params.Add("source-path", "/store/apps/datasafety")
-	params.Add("f.sid", "-2272275650025625973")
-	params.Add("bl", "boq_playuiserver_20220427.02_p0")
-	params.Add("hl", "en")
-	params.Add("gl", "us")
-	params.Add("authuser", "")
-	params.Add("soc-app", "121")
-	params.Add("soc-platform", "1")
-	params.Add("soc-device", "1")
-	params.Add("_reqid", "181072")
-	req.URL.RawQuery = params.Encode()
-
-	req.Header.Add("Content-Type", "application/x-www-form-urlencoded;charset=UTF-8")
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-
-	// Even if the app is not found, the status is still 200 so don't check
-	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	envelopes, err := respToEnvelopes(body)
-	if err != nil {
-		return nil, err
-	}
-
-	// App does not exist
-	if envelopes[0].Payload == "" {
+func (br *dataSafetyRequester) ParseEnvelope(payload []byte) (interface{}, error) {
+	if len(payload) == 0 {
 		return nil, ErrAppNotFound
 	}
 
-	dataSafetyRaw := gjson.Get(envelopes[0].Payload, "1.2.137.4")
+	dataSafetyRaw := gjson.GetBytes(payload, "1.2.137.4")
 	if dataSafetyRaw.Value() == nil {
 		// App does not have data safety section yet
 		return nil, nil
@@ -236,7 +144,7 @@ func ScrapeDataSafety(ctx context.Context, client *http.Client, appId string) (*
 	}
 
 	// Security practices
-	rawSecurityPractices := gjson.Get(envelopes[0].Payload, "1.2.137.9")
+	rawSecurityPractices := gjson.GetBytes(payload, "1.2.137.9")
 	if rawSecurityPractices.Exists() {
 		if title := rawSecurityPractices.Get("1").String(); title != "Security practices" {
 			return nil, fmt.Errorf("invalid security practices title: %s", title)
@@ -250,4 +158,29 @@ func ScrapeDataSafety(ctx context.Context, client *http.Client, appId string) (*
 	}
 
 	return &dataSafety, nil
+}
+
+func ScrapeDataSafety(ctx context.Context, client *http.Client, appId string) (*DataSafety, error) {
+	requester := &dataSafetyRequester{AppId: appId}
+
+	envelopes, err := sendRequests(ctx, client, []batchRequester{requester})
+	if err != nil {
+		return nil, err
+	}
+
+	if len(envelopes) == 0 {
+		return nil, fmt.Errorf("no envelope")
+	}
+
+	envelope := envelopes[0]
+
+	ds, err := requester.ParseEnvelope([]byte(envelope.Payload))
+	if err != nil {
+		return nil, err
+	}
+
+	if ds == nil {
+		return nil, nil
+	}
+	return ds.(*DataSafety), nil
 }
