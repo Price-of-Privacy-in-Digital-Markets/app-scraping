@@ -20,12 +20,12 @@ type SimilarApp struct {
 	Currency  string     `json:"currency"`
 }
 
-type SimilarAppExtractError struct {
+type SimilarAppsExtractError struct {
 	Errors  []error
 	Payload string
 }
 
-func (e *SimilarAppExtractError) Error() string {
+func (e *SimilarAppsExtractError) Error() string {
 	sb := strings.Builder{}
 
 	sb.WriteString("Error extracting similar apps:\n")
@@ -66,7 +66,7 @@ func (br *similarBatchRequester) ParseEnvelope(payload string) (interface{}, err
 	currencies := extract.StringSlice("#.8.1.0.1")
 
 	if len(extract.Errors()) > 0 {
-		return nil, &SimilarAppExtractError{Errors: extract.Errors(), Payload: payload}
+		return nil, &SimilarAppsExtractError{Errors: extract.Errors(), Payload: payload}
 	}
 
 	n := len(appIds)
