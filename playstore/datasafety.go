@@ -104,12 +104,12 @@ func (br *dataSafetyRequester) BatchRequest() batchRequest {
 	}
 }
 
-func (br *dataSafetyRequester) ParseEnvelope(payload []byte) (interface{}, error) {
+func (br *dataSafetyRequester) ParseEnvelope(payload string) (interface{}, error) {
 	if len(payload) == 0 {
 		return nil, ErrAppNotFound
 	}
 
-	dataSafetyRaw := gjson.GetBytes(payload, "1.2.137.4")
+	dataSafetyRaw := gjson.Get(payload, "1.2.137.4")
 	if dataSafetyRaw.Value() == nil {
 		// App does not have data safety section yet
 		return nil, nil
@@ -144,7 +144,7 @@ func (br *dataSafetyRequester) ParseEnvelope(payload []byte) (interface{}, error
 	}
 
 	// Security practices
-	rawSecurityPractices := gjson.GetBytes(payload, "1.2.137.9")
+	rawSecurityPractices := gjson.Get(payload, "1.2.137.9")
 	if rawSecurityPractices.Exists() {
 		if title := rawSecurityPractices.Get("1").String(); title != "Security practices" {
 			return nil, fmt.Errorf("invalid security practices title: %s", title)
@@ -163,7 +163,7 @@ func (br *dataSafetyRequester) ParseEnvelope(payload []byte) (interface{}, error
 func ScrapeDataSafety(ctx context.Context, client *http.Client, appId string) (*DataSafety, error) {
 	requester := &dataSafetyRequester{AppId: appId}
 
-	envelopes, err := sendRequests(ctx, client, []batchRequester{requester})
+	envelopes, err := sendRequests(ctx, client, "us", "en", []batchRequester{requester})
 	if err != nil {
 		return nil, err
 	}
@@ -174,7 +174,7 @@ func ScrapeDataSafety(ctx context.Context, client *http.Client, appId string) (*
 
 	envelope := envelopes[0]
 
-	ds, err := requester.ParseEnvelope([]byte(envelope.Payload))
+	ds, err := requester.ParseEnvelope(envelope.Payload)
 	if err != nil {
 		return nil, err
 	}

@@ -2,7 +2,6 @@ package playstore
 
 import (
 	"errors"
-	"fmt"
 	"strings"
 
 	"golang.org/x/net/html"
@@ -10,33 +9,6 @@ import (
 )
 
 var ErrAppNotFound error = errors.New("app not found")
-
-func pluck(val interface{}, path ...int) (interface{}, error) {
-	current := val
-
-	for _, p := range path {
-		current_slice, ok := current.([]interface{})
-		if !ok {
-			return nil, fmt.Errorf("pluck: not a slice")
-		}
-
-		if p < len(current_slice) {
-			current = current_slice[p]
-		} else {
-			return nil, fmt.Errorf("pluck: index out of range")
-		}
-	}
-
-	return current, nil
-}
-
-func pluckPanic(val interface{}, path ...int) interface{} {
-	ret, err := pluck(val, path...)
-	if err != nil {
-		panic(err)
-	}
-	return ret
-}
 
 func textFromHTML(description string) (string, error) {
 	fragment, err := html.ParseFragment(strings.NewReader(description), nil)

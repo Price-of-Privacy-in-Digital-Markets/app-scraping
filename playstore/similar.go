@@ -1,14 +1,12 @@
 package playstore
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"io/ioutil"
 	"net/http"
-	"net/url"
 	"strings"
 
+	"github.com/tidwall/gjson"
 	"gopkg.in/guregu/null.v4"
 )
 
@@ -22,105 +20,94 @@ type SimilarApp struct {
 	Currency  string     `json:"currency"`
 }
 
-func ScrapeSimilarApps(ctx context.Context, client *http.Client, appId string, country string, language string) ([]SimilarApp, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", "https://play.google.com/store/apps/similar", nil)
-	if err != nil {
-		return nil, err
-	}
-	q := url.Values{}
-	q.Set("id", appId)
-	q.Set("gl", country)
-	q.Set("hl", language)
-	req.URL.RawQuery = q.Encode()
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-
-	// This does not necessarily mean that the app was not found, just that there are no similar apps
-	if resp.StatusCode == 404 {
-		return nil, err
-	}
-
-	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	dataMap, serviceRequestIdMap, err := extractScriptData(bytes.NewReader(body))
-	if err != nil {
-		err = &DetailsExtractError{
-			AppId:    appId,
-			Country:  country,
-			Language: language,
-			Errors:   []error{err},
-			Body:     body,
-		}
-		return nil, err
-	}
-
-	extract := newExtractor(dataMap, serviceRequestIdMap)
-	rawSimilarApps, ok := extract.Block("ds:3").Json(0, 1, 0, 0, 0).([]interface{})
-	if !ok {
-		err := &SimilarAppsExtractError{
-			AppId:    appId,
-			Country:  country,
-			Language: language,
-			Errors:   []error{fmt.Errorf("cannot find list of similar apps")},
-			Body:     body,
-		}
-		return nil, err
-	}
-
-	var similar []SimilarApp
-	for _, rawSimilarApp := range rawSimilarApps {
-		appExtract := blockExtractor{
-			data:   rawSimilarApp,
-			errors: &extract.errors,
-		}
-		similarApp := SimilarApp{
-			AppId:     appExtract.String(12, 0),
-			Title:     appExtract.String(2),
-			Developer: appExtract.String(4, 0, 0, 0),
-			Score:     appExtract.OptionalFloat64(6, 0, 2, 1, 1),
-			ScoreText: appExtract.String(6, 0, 2, 1, 0),
-			Price:     price(appExtract.OptionalFloat64(7, 0, 3, 2, 1, 0, 0)),
-			Currency:  appExtract.String(7, 0, 3, 2, 1, 0, 1),
-		}
-
-		similar = append(similar, similarApp)
-	}
-
-	if extract.Errors() != nil {
-		err = &SimilarAppsExtractError{
-			AppId:    appId,
-			Country:  country,
-			Language: language,
-			Errors:   extract.Errors(),
-			Body:     body,
-		}
-	}
-
-	return similar, nil
+type SimilarAppExtractError struct {
+	Errors  []error
+	Payload string
 }
 
-type SimilarAppsExtractError struct {
-	AppId    string
-	Country  string
-	Language string
-	Errors   []error
-	Body     []byte
-}
-
-func (e *SimilarAppsExtractError) Error() string {
+func (e *SimilarAppExtractError) Error() string {
 	sb := strings.Builder{}
 
-	sb.WriteString(fmt.Sprintf("Error extracting similar apps from %s (country: %s, language: %s)\n", e.AppId, e.Country, e.Language))
+	sb.WriteString("Error extracting similar apps:\n")
 	for _, err := range e.Errors {
 		sb.WriteString(fmt.Sprintf("\t- %s\n", err.Error()))
 	}
 
 	return sb.String()
+}
+
+type similarBatchRequester struct {
+	AppId string
+}
+
+func (br *similarBatchRequester) BatchRequest() batchRequest {
+	return batchRequest{
+		RpcId:   "ag2B9c",
+		Payload: fmt.Sprintf(`[[null,["%s",7],null,[[3,[20]],true,null,[1,8]]],[true]]`, br.AppId),
+	}
+}
+
+func (br *similarBatchRequester) ParseEnvelope(payload string) (interface{}, error) {
+	result := gjson.Get(payload, "1.1.1.21.0")
+
+	if result.Type == gjson.Null {
+		// There are no similar apps
+		return []SimilarApp{}, nil
+	}
+
+	extract := NewExtractor(result.Raw)
+
+	appIds := extract.StringSlice("#.0.0")
+	titles := extract.StringSlice("#.3")
+	developers := extract.StringSlice("#.14")
+	scores := extract.OptionalFloatSlice("#.4.1")
+	scoreTexts := extract.StringSlice("#.4.0")
+	prices := extract.FloatSlice("#.8.1.0.0")
+	currencies := extract.StringSlice("#.8.1.0.1")
+
+	if len(extract.Errors()) > 0 {
+		return nil, &SimilarAppExtractError{Errors: extract.Errors(), Payload: payload}
+	}
+
+	n := len(appIds)
+	similarApps := make([]SimilarApp, 0, n)
+
+	for i := 0; i < n; i++ {
+		similarApp := SimilarApp{
+			AppId:     appIds[i],
+			Title:     titles[i],
+			Developer: developers[i],
+			Score:     scores[i],
+			ScoreText: scoreTexts[i],
+			Price:     price(prices[i]),
+			Currency:  currencies[i],
+		}
+		similarApps = append(similarApps, similarApp)
+	}
+
+	return similarApps, nil
+}
+
+func ScrapeSimilar(ctx context.Context, client *http.Client, appId string, country string, language string) ([]SimilarApp, error) {
+	requester := &similarBatchRequester{AppId: appId}
+	envelopes, err := sendRequests(ctx, client, country, language, []batchRequester{requester})
+	if err != nil {
+		return nil, err
+	}
+
+	if len(envelopes) == 0 {
+		return nil, fmt.Errorf("no envelope")
+	}
+	envelope := envelopes[0]
+
+	if len(envelope.Payload) == 0 {
+		return nil, ErrAppNotFound
+	}
+
+	similar, err := requester.ParseEnvelope(envelope.Payload)
+	if err != nil {
+		return nil, err
+	}
+
+	return similar.([]SimilarApp), nil
 }

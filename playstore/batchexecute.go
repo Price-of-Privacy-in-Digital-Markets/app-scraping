@@ -20,7 +20,7 @@ type envelope struct {
 
 type batchRequester interface {
 	BatchRequest() batchRequest
-	ParseEnvelope([]byte) (interface{}, error)
+	ParseEnvelope(string) (interface{}, error)
 }
 
 type batchRequest struct {
@@ -71,8 +71,8 @@ func respToEnvelopes(body []byte) ([]envelope, error) {
 	return envelopes, nil
 }
 
-func sendRequests(ctx context.Context, client *http.Client, requesters []batchRequester) ([]envelope, error) {
-	const dataSafetyUrl = "https://play.google.com/_/PlayStoreUi/data/batchexecute"
+func sendRequests(ctx context.Context, client *http.Client, country string, language string, requesters []batchRequester) ([]envelope, error) {
+	const batchExecuteUrl = "https://play.google.com/_/PlayStoreUi/data/batchexecute"
 
 	// Make the body of the request
 	rpcids := make([]string, 0, len(requesters))
@@ -92,7 +92,7 @@ func sendRequests(ctx context.Context, client *http.Client, requesters []batchRe
 	form := url.Values{}
 	form.Set("f.req", string(fReqJson))
 
-	req, err := http.NewRequestWithContext(ctx, "POST", dataSafetyUrl, strings.NewReader(form.Encode()))
+	req, err := http.NewRequestWithContext(ctx, "POST", batchExecuteUrl, strings.NewReader(form.Encode()))
 	if err != nil {
 		return nil, err
 	}
@@ -101,8 +101,8 @@ func sendRequests(ctx context.Context, client *http.Client, requesters []batchRe
 	params := req.URL.Query()
 	params.Add("rpcids", strings.Join(rpcids, ","))
 	params.Add("f.sid", "-2272275650025625973")
-	params.Add("hl", "en")
-	params.Add("gl", "us")
+	params.Add("hl", language)
+	params.Add("gl", country)
 	params.Add("authuser", "")
 	params.Add("_reqid", "181072")
 	req.URL.RawQuery = params.Encode()

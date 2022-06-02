@@ -1,238 +1,293 @@
 package playstore
 
 import (
-	"encoding/json"
 	"fmt"
 	"math"
-	"strconv"
 	"strings"
+	"time"
 
+	"github.com/tidwall/gjson"
 	"gopkg.in/guregu/null.v4"
 )
 
 type extractor struct {
-	dataMap             map[string]interface{}
-	serviceRequestIdMap map[string]string
-	errors              []error
+	payload string
+	errors  []error
 }
 
-func newExtractor(dataMap map[string]interface{}, serviceRequestIdMap map[string]string) extractor {
-	return extractor{
-		dataMap:             dataMap,
-		serviceRequestIdMap: serviceRequestIdMap,
-		errors:              nil,
+func NewExtractor(payload string) *extractor {
+	return &extractor{
+		payload: payload,
+		errors:  nil,
 	}
-}
-
-func (e *extractor) Error(err error) {
-	e.errors = append(e.errors, err)
 }
 
 func (e *extractor) Errors() []error {
 	return e.errors
 }
 
-func (e *extractor) Block(key string) *blockExtractor {
-	block, exists := e.dataMap[key]
-	if !exists {
-		e.Error(fmt.Errorf("Block(%s): no such block", key))
+func (e *extractor) Error(err error) {
+	e.errors = append(e.errors, err)
+}
 
-		// This chucks away any errors from extracting paths on the returned blockExtractor
-		return &blockExtractor{
-			data:   nil,
-			errors: &[]error{},
-		}
-	}
-	return &blockExtractor{
-		data:   block,
-		key:    key,
-		errors: &e.errors,
+func (e *extractor) error(path string, msg string) {
+	e.errors = append(e.errors, fmt.Errorf("%s: %s", path, msg))
+}
+
+func (e *extractor) IsNull(path string) bool {
+	result := gjson.Get(e.payload, path)
+	return result.Type == gjson.Null
+}
+
+func (e *extractor) Bool(path string) bool {
+	result := gjson.Get(e.payload, path)
+
+	switch result.Type {
+	case gjson.False:
+		return false
+	case gjson.True:
+		return true
+	default:
+		e.error(path, fmt.Sprintf("wrong type '%s'", result.Type))
+		return false
 	}
 }
 
-func (e *extractor) BlockWithServiceRequestId(serviceRequestId string) *blockExtractor {
-	key, ok := e.serviceRequestIdMap[serviceRequestId]
+func (e *extractor) int(path string) (int64, bool) {
+	result := gjson.Get(e.payload, path)
+
+	if result.Type != gjson.Number {
+		e.error(path, fmt.Sprintf("wrong type '%s'", result.Type))
+		return 0, false
+	}
+
+	num := result.Num
+	if num != math.Trunc(num) {
+		e.error(path, "not an integer")
+		return 0, false
+	}
+
+	if num < math.MinInt64 || num > math.MaxInt64 {
+		e.error(path, "float cannot be converted to int64")
+		return 0, false
+	}
+
+	return int64(num), true
+}
+
+func (e *extractor) Int(path string) int64 {
+	i, ok := e.int(path)
 	if !ok {
-		e.Error(fmt.Errorf("BlockWithServiceRequestId(%s): no such service request ID", key))
-	}
-
-	return e.Block(key)
-}
-
-type blockExtractor struct {
-	data   interface{}
-	key    string
-	errors *[]error
-}
-
-func (e *blockExtractor) error(funcName string, errorMsg string, path []int) {
-	var sb strings.Builder
-	for i, p := range path {
-		if i > 0 {
-			sb.WriteString(",")
-		}
-		sb.WriteString(strconv.FormatInt(int64(p), 10))
-	}
-	commaSeparatedPath := sb.String()
-
-	var err error
-	if e.key == "" {
-		err = fmt.Errorf("%s(%s): %s", funcName, commaSeparatedPath, errorMsg)
+		return i
 	} else {
-		err = fmt.Errorf("%s(%s, %s): %s", funcName, e.key, commaSeparatedPath, errorMsg)
+		return i
 	}
-
-	*e.errors = append(*e.errors, err)
 }
 
-func (e *blockExtractor) Errors() []error {
-	return *e.errors
-}
+func (e *extractor) Float(path string) float64 {
+	result := gjson.Get(e.payload, path)
 
-func (e *blockExtractor) Json(path ...int) interface{} {
-	ret, err := pluck(e.data, path...)
-	if err != nil {
-		return nil
-	}
-	return ret
-}
-
-func (e *blockExtractor) Bool(path ...int) bool {
-	val := e.Json(path...)
-
-	switch val := val.(type) {
-	case nil:
-		return false
-	case bool:
-		return val
-	case json.Number:
-		floating, err := val.Float64()
-		if err == nil {
-			return floating != 0
-		}
-
-		integer, err := val.Int64()
-		if err == nil {
-			return integer != 0
-		}
-		e.error("Bool", "cannot convert json.Number to float64 or int64", path)
-		return false
-	case float64, int64:
-		return val != 0
-	case string:
-		return val != ""
+	switch result.Type {
+	case gjson.Number:
+		return result.Num
 	default:
-		e.error("Bool", "wrong type", path)
-		return false
+		e.error(path, fmt.Sprintf("wrong type '%s'", result.Type))
+		return 0.0
 	}
 }
 
-func (e *blockExtractor) Number(path ...int) json.Number {
-	val := e.Json(path...)
+func (e *extractor) String(path string) string {
+	result := gjson.Get(e.payload, path)
 
-	number, ok := val.(json.Number)
-	if !ok {
-		e.error("Number", "wrong type", path)
-	}
-	return number
-}
-
-func (e *blockExtractor) Int64(path ...int) int64 {
-	val := e.Json(path...)
-
-	switch val := val.(type) {
-	case int64:
-		return val
-	case float64:
-		if val == math.Trunc(val) {
-			if val > math.MaxInt64 {
-				e.error("Int64", "float64 is too large", path)
-				return 0
-			}
-			return int64(val)
-		} else {
-			e.error("Int64", "float64 is not an integer", path)
-			return 0
-		}
-	case json.Number:
-		integer, err := val.Int64()
-		if err != nil {
-			e.error("Int64", "cannot convert json.Number to int64", path)
-		}
-		return integer
-	case string:
-		converted, err := strconv.ParseInt(val, 10, 64)
-		if err != nil {
-			e.error("Int64", "cannot convert string to int64", path)
-		}
-		return converted
+	switch result.Type {
+	case gjson.String:
+		return strings.ReplaceAll(result.Str, "\x00", "")
 	default:
-		e.error("Int64", "wrong type", path)
-		return 0
-	}
-}
-
-func (e *blockExtractor) String(path ...int) string {
-	val := e.Json(path...)
-
-	switch val := val.(type) {
-	case string:
-		return strings.ReplaceAll(val, "\x00", "")
-	default:
-		e.error("String", "wrong type", path)
+		e.error(path, fmt.Sprintf("wrong type '%s'", result.Type))
 		return ""
 	}
 }
 
-func (e *blockExtractor) OptionalString(path ...int) null.String {
-	val := e.Json(path...)
+func (e *extractor) StringSlice(path string) []string {
+	result := gjson.Get(e.payload, path)
+	if !result.IsArray() {
+		e.error(path, "is not array")
+		return nil
+	}
+	results := result.Array()
+	slice := make([]string, 0, len(results))
 
-	switch val := val.(type) {
-	case nil:
-		return null.String{}
-	case string:
-		return null.StringFrom(strings.ReplaceAll(val, "\x00", ""))
+	for i, r := range results {
+		switch r.Type {
+		case gjson.String:
+			slice = append(slice, r.Str)
+		default:
+			e.error(fmt.Sprintf("%s.%d", path, i), "wrong type")
+			return nil
+		}
+	}
+
+	return slice
+}
+
+func (e *extractor) FloatSlice(path string) []float64 {
+	result := gjson.Get(e.payload, path)
+	if !result.IsArray() {
+		e.error(path, "is not array")
+		return nil
+	}
+	results := result.Array()
+	slice := make([]float64, 0, len(results))
+
+	for i, r := range results {
+		switch r.Type {
+		case gjson.Number:
+			slice = append(slice, r.Num)
+		default:
+			e.error(fmt.Sprintf("%s.%d", path, i), "wrong type")
+			return nil
+		}
+	}
+
+	return slice
+}
+
+func (e *extractor) OptionalFloatSlice(path string) []null.Float {
+	result := gjson.Get(e.payload, path)
+	if !result.IsArray() {
+		e.error(path, "is not array")
+		return nil
+	}
+	results := result.Array()
+	slice := make([]null.Float, 0, len(results))
+
+	for i, r := range results {
+		switch r.Type {
+		case gjson.Null:
+			slice = append(slice, null.Float{})
+		case gjson.Number:
+			slice = append(slice, null.FloatFrom(r.Num))
+		default:
+			e.error(fmt.Sprintf("%s.%d", path, i), "wrong type")
+			return nil
+		}
+	}
+
+	return slice
+}
+
+func (e *extractor) Time(path string) time.Time {
+	i, ok := e.int(path)
+	if !ok {
+		return time.Time{}
+	}
+
+	return time.Unix(i, 0)
+}
+
+func (e *extractor) Json(path string) gjson.Result {
+	return gjson.Get(e.payload, path)
+}
+
+func (e *extractor) OptionalBool(path string) null.Bool {
+	result := gjson.Get(e.payload, path)
+
+	switch result.Type {
+	case gjson.Null:
+		return null.Bool{}
+	case gjson.False:
+		return null.BoolFrom(false)
+	case gjson.True:
+		return null.BoolFrom(true)
 	default:
-		e.error("OptionalString", "wrong type", path)
-		return null.String{}
+		e.error(path, fmt.Sprintf("wrong type '%s'", result.Type))
+		return null.Bool{}
 	}
 }
 
-func (e *blockExtractor) OptionalInt64(path ...int) null.Int {
-	val := e.Json(path...)
+func (e *extractor) OptionalInt(path string) null.Int {
+	result := gjson.Get(e.payload, path)
 
-	if val == nil {
+	if result.Type == gjson.Null {
 		return null.Int{}
 	}
-	return null.IntFrom(e.Int64(path...))
+
+	i, ok := e.int(path)
+	if !ok {
+		return null.Int{}
+	}
+
+	return null.IntFrom(i)
 }
 
-func (e *blockExtractor) OptionalFloat64(path ...int) null.Float {
-	val := e.Json(path...)
+func (e *extractor) OptionalFloat(path string) null.Float {
+	result := gjson.Get(e.payload, path)
 
-	switch val := val.(type) {
-	case nil:
+	switch result.Type {
+	case gjson.Null:
 		return null.Float{}
-	case json.Number:
-		floating, err := val.Float64()
-		if err != nil {
-			e.error("OptionalFloat64", "cannot convert json.Number to float64", path)
-			return null.Float{}
-		}
-		return null.FloatFrom(floating)
-	case float64:
-		return null.FloatFrom(val)
-	case int64:
-		return null.FloatFrom(float64(val))
-	case string:
-		converted, err := strconv.ParseFloat(val, 64)
-		if err != nil {
-			e.error("OptionalFloat64", "cannot convert string to float", path)
-			return null.Float{}
-		}
-		return null.FloatFrom(converted)
+	case gjson.Number:
+		return null.FloatFrom(result.Num)
 	default:
-		e.error("OptionalFloat64", "wrong type", path)
+		e.error(path, fmt.Sprintf("wrong type '%s'", result.Type))
 		return null.Float{}
 	}
+}
+
+func (e *extractor) OptionalString(path string) null.String {
+	result := gjson.Get(e.payload, path)
+
+	switch result.Type {
+	case gjson.Null:
+		return null.String{}
+	case gjson.String:
+		return null.StringFrom(strings.ReplaceAll(result.Str, "\x00", ""))
+	default:
+		e.error(path, fmt.Sprintf("wrong type '%s'", result.Type))
+		return null.String{}
+	}
+}
+
+func (e *extractor) OptionalStringSlice(path string) []string {
+	result := gjson.Get(e.payload, path)
+
+	if result.Type == gjson.Null {
+		return nil
+	}
+
+	if !result.IsArray() {
+		e.error(path, "is not array")
+		return nil
+	}
+
+	results := result.Array()
+	slice := make([]string, 0, len(results))
+
+	for i, r := range results {
+		switch r.Type {
+		case gjson.String:
+			slice = append(slice, r.Str)
+		case gjson.Null:
+			continue
+		default:
+			e.error(fmt.Sprintf("%s.%d", path, i), "wrong type")
+			return nil
+		}
+	}
+
+	return slice
+}
+
+func (e *extractor) OptionalTime(path string) null.Time {
+	result := gjson.Get(e.payload, path)
+	if result.Type == gjson.Null {
+		return null.Time{}
+	}
+
+	i, ok := e.int(path)
+	if !ok {
+		return null.Time{}
+	}
+
+	return null.TimeFrom(time.Unix(i, 0))
 }

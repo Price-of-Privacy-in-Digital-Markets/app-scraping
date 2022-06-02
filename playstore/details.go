@@ -1,276 +1,190 @@
 package playstore
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
-	"regexp"
 	"strings"
 	"time"
 
-	"golang.org/x/net/html"
-	"golang.org/x/net/html/atom"
+	"github.com/tidwall/gjson"
 	"gopkg.in/guregu/null.v4"
 )
 
-var (
-	re_af_init_data_callback  = regexp.MustCompile(`AF_initDataCallback\(\{key:\s*'([a-zA-Z0-9:]+)',.*?data:\s*(.*?),\s*sideChannel:\s*\{\}\}\);`)
-	re_service_request_body   = regexp.MustCompile(`var AF_dataServiceRequests = \{(.*?)\};\s*var AF_initDataChunkQueue`)
-	re_service_request_key_id = regexp.MustCompile(`'(ds:[0-9]+)'\s*:\s*\{.*?id\s*:\s*'([a-zA-Z0-9]+)'.*?\}`)
-)
-
-func extractScriptData(body io.Reader) (dataMap map[string]interface{}, serviceRequestMap map[string]string, err error) {
-	document, err := html.Parse(body)
-	if err != nil {
-		return
-	}
-
-	// Go through all the nodes and find the script tags
-	var scripts []string
-	var visitor func(*html.Node)
-	visitor = func(n *html.Node) {
-		if n.Type == html.ElementNode && n.DataAtom == atom.Script {
-			if n.FirstChild != nil && n.FirstChild.Type == html.TextNode {
-				scripts = append(scripts, n.FirstChild.Data)
-			}
-		}
-
-		for c := n.FirstChild; c != nil; c = c.NextSibling {
-			visitor(c)
-		}
-	}
-	visitor(document)
-
-	// Mapping of keys, e.g. ds:1, to data
-	dataMap = make(map[string]interface{})
-
-	// Sometime the mappings, e.g ds:1, ds:2 change for different countries but the service request IDs appear to be
-	// permanent. Create a mapping of service request IDs => keys from the the javascript objects returned by
-	// the AF_dataServiceRequests function
-	// See: https://github.com/facundoolano/google-play-scraper/pull/412
-	serviceRequestMap = make(map[string]string)
-
-	for _, s := range scripts {
-		matches := re_af_init_data_callback.FindAllStringSubmatch(s, -1)
-		for _, m := range matches {
-			key := m[1]
-			var data []interface{}
-
-			d := json.NewDecoder(strings.NewReader(m[2]))
-			d.UseNumber()
-			err = d.Decode(&data)
-			if err != nil {
-				return
-			}
-			dataMap[key] = data
-		}
-
-		service_request_match := re_service_request_body.FindStringSubmatch(s)
-		if service_request_match != nil {
-			matches := re_service_request_key_id.FindAllStringSubmatch(service_request_match[1], -1)
-			for _, m := range matches {
-				serviceRequestMap[m[2]] = m[1]
-			}
-		}
-	}
-
-	return
-}
-
 type Details struct {
-	AppId                    string      `json:"app_id"`
-	Country                  string      `json:"country"`
-	Language                 string      `json:"language"`
-	Title                    string      `json:"title"`
-	Description              string      `json:"description"`
-	DescriptionHTML          string      `json:"description_html"`
-	Summary                  string      `json:"summary"`
-	Installs                 null.String `json:"installs"`
-	MinInstalls              null.Int    `json:"min_installs"`
-	MaxInstalls              null.Int    `json:"max_installs"`
-	Score                    null.Float  `json:"score"`
-	ScoreText                null.String `json:"score_text"`
-	Ratings                  int64       `json:"ratings"`
-	Reviews                  int64       `json:"reviews"`
-	Histogram                Histogram   `json:"histogram"`
-	Price                    float64     `json:"price"`
-	Currency                 null.String `json:"currency"`
-	PriceText                string      `json:"price_text"`
-	Sale                     bool        `json:"sale"`
-	SaleTime                 null.Time   `json:"sale_time"`
-	OriginalPrice            null.Float  `json:"original_price"`
-	SaleText                 null.String `json:"sale_text"`
-	Available                bool        `json:"available"`
-	OffersIAP                bool        `json:"in_app_purchases"`
-	IAPRange                 null.String `json:"in_app_purchases_range"`
-	Size                     string      `json:"size"`
-	AndroidVersion           string      `json:"android_version"`
-	Developer                string      `json:"developer"`
-	DeveloperId              int64       `json:"developer_id"`
-	DeveloperEmail           null.String `json:"developer_email"`
-	DeveloperWebsite         null.String `json:"developer_website"`
-	DeveloperAddress         null.String `json:"developer_address"`
-	PrivacyPolicy            null.String `json:"privacy_policy"`
-	Genre                    string      `json:"genre"`
-	GenreId                  string      `json:"genre_id"`
-	FamilyGenre              null.String `json:"family_genre"`
-	FamilyGenreId            null.String `json:"family_genre_id"`
-	Icon                     null.String `json:"icon"`
-	HeaderImage              null.String `json:"header_image"`
-	Screenshots              []string    `json:"screenshots"`
-	Video                    null.String `json:"video"`
-	VideoImage               null.String `json:"video_image"`
-	ContentRating            null.String `json:"content_rating"`
-	ContentRatingDescription null.String `json:"content_rating_description"`
-	AdSupported              bool        `json:"ad_supported"`
-	Updated                  time.Time   `json:"updated"`
-	Version                  string      `json:"version"`
-	RecentChanges            null.String `json:"recent_changes"`
-	Comments                 []string    `json:"comments"`
-	EditorsChoice            bool        `json:"editors_choice"`
+	AppId                    string       `json:"app_id"`
+	Country                  string       `json:"country"`
+	Language                 string       `json:"language"`
+	Title                    string       `json:"title"`
+	Description              string       `json:"description"`
+	DescriptionHTML          string       `json:"description_html"`
+	Summary                  string       `json:"summary"`
+	Installs                 string       `json:"installs"`
+	MinInstalls              int64        `json:"min_installs"`
+	MaxInstalls              int64        `json:"max_installs"`
+	Score                    null.Float   `json:"score"`
+	ScoreText                null.String  `json:"score_text"`
+	Ratings                  int64        `json:"ratings"`
+	Reviews                  int64        `json:"reviews"`
+	Histogram                Histogram    `json:"histogram"`
+	Price                    float64      `json:"price"`
+	Currency                 null.String  `json:"currency"`
+	PriceText                string       `json:"price_text"`
+	Sale                     bool         `json:"sale"`
+	SaleEndTime              null.Time    `json:"sale_end_time"`
+	OriginalPrice            null.Float   `json:"original_price"`
+	OriginalPriceText        null.String  `json:"original_price_text"`
+	SaleText                 null.String  `json:"sale_text"`
+	Available                bool         `json:"available"`
+	OffersIAP                bool         `json:"in_app_purchases"`
+	IAPRange                 null.String  `json:"in_app_purchases_range"`
+	Size                     string       `json:"size"`
+	MinAPILevel              null.Int     `json:"min_api"`
+	TargetAPILevel           int64        `json:"target_api"`
+	MinAndroidVersion        null.String  `json:"min_android_version"`
+	Developer                string       `json:"developer"`
+	DeveloperId              string       `json:"developer_id"`
+	DeveloperEmail           null.String  `json:"developer_email"`
+	DeveloperWebsite         null.String  `json:"developer_website"`
+	DeveloperAddress         null.String  `json:"developer_address"`
+	PrivacyPolicy            null.String  `json:"privacy_policy"`
+	Genre                    string       `json:"genre_id"`
+	AdditionalGenres         []string     `json:"additional_genre_ids"`
+	TeacherApprovedAge       null.String  `json:"teacher_approved_age"`
+	Icon                     null.String  `json:"icon"`
+	HeaderImage              null.String  `json:"header_image"`
+	Screenshots              []string     `json:"screenshots"`
+	Video                    null.String  `json:"video"`
+	VideoImage               null.String  `json:"video_image"`
+	ContentRating            null.String  `json:"content_rating"`
+	ContentRatingDescription null.String  `json:"content_rating_description"`
+	AdSupported              bool         `json:"ad_supported"`
+	Released                 null.Time    `json:"released"`
+	Updated                  time.Time    `json:"updated"`
+	Version                  null.String  `json:"version"`
+	RecentChanges            null.String  `json:"recent_changes"`
+	RecentChangesTime        null.Time    `json:"recent_changes_time"`
+	Permissions              []Permission `json:"permissions"`
 }
 
 type Histogram struct {
-	Stars1 json.Number `json:"1"`
-	Stars2 json.Number `json:"2"`
-	Stars3 json.Number `json:"3"`
-	Stars4 json.Number `json:"4"`
-	Stars5 json.Number `json:"5"`
+	Stars1 int64 `json:"1"`
+	Stars2 int64 `json:"2"`
+	Stars3 int64 `json:"3"`
+	Stars4 int64 `json:"4"`
+	Stars5 int64 `json:"5"`
 }
 
-func ScrapeDetails(ctx context.Context, client *http.Client, appId string, country string, language string) (details Details, err error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", "https://play.google.com/store/apps/details", nil)
-	if err != nil {
-		return
+type Permission struct {
+	Group      string `json:"group"`
+	Permission string `json:"permission"`
+}
+
+type detailsBatchRequester struct {
+	AppId string
+}
+
+func (br *detailsBatchRequester) BatchRequest() batchRequest {
+	return batchRequest{
+		RpcId:   "Ws7gDc",
+		Payload: fmt.Sprintf(`[null,null,[[1,9,10,11,14,19,20,43,45,47,49,52,58,59,63,69,70,73,74,75,78,79,80,91,92,95,96,97,100,101,103,106,112,119,139,141,145,146]],[[[true],null,[[[]]],null,null,null,null,[null,2],null,null,null,null,null,null,[1],null,null,null,null,null,null,null,[1]],[null,[[[]]]],[null,[[[]]],null,[true]],[null,[[[]]]],null,null,null,null,[[[[]]]],[[[[]]]]],null,[["%s",7]]]`, br.AppId),
 	}
-	q := url.Values{}
-	q.Set("id", appId)
-	q.Set("gl", country)
-	q.Set("hl", language)
-	req.URL.RawQuery = q.Encode()
+}
 
-	resp, err := client.Do(req)
-	if err != nil {
-		return
-	}
+func (br *detailsBatchRequester) ParseEnvelope(payload string) (interface{}, error) {
+	extract := NewExtractor(payload)
 
-	if resp.StatusCode == 404 {
-		err = ErrAppNotFound
-		return
-	}
-
-	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return
-	}
-
-	dataMap, serviceRequestIdMap, err := extractScriptData(bytes.NewReader(body))
-	if err != nil {
-		err = &DetailsExtractError{
-			AppId:    appId,
-			Country:  country,
-			Language: language,
-			Errors:   []error{err},
-			Body:     body,
-		}
-		return
-	}
-
-	// Now try and extract the data from the JSON blobs
-	extract := newExtractor(dataMap, serviceRequestIdMap)
-
-	descriptionHTML := extract.Block("ds:5").String(0, 10, 0, 1)
+	descriptionHTML := extract.String("1.2.72.0.1")
 	description, err := textFromHTML(descriptionHTML)
 	if err != nil {
 		extract.Error(fmt.Errorf("app description contains invalid HTML"))
 	}
 
-	inAppPurchases := extract.Block("ds:5").OptionalString(0, 12, 12, 0)
+	iap := extract.OptionalString("1.2.19.0")
 
-	details = Details{
-		AppId:                    appId,
-		Country:                  country,
-		Language:                 language,
-		Title:                    extract.Block("ds:5").String(0, 0, 0),
-		Description:              description,
-		DescriptionHTML:          descriptionHTML,
-		Summary:                  extract.Block("ds:5").String(0, 10, 1, 1),
-		Installs:                 extract.Block("ds:5").OptionalString(0, 12, 9, 0),
-		MinInstalls:              extract.Block("ds:5").OptionalInt64(0, 12, 9, 1),
-		MaxInstalls:              extract.Block("ds:5").OptionalInt64(0, 12, 9, 2),
-		Score:                    extract.Block("ds:6").OptionalFloat64(0, 6, 0, 1),
-		ScoreText:                extract.Block("ds:6").OptionalString(0, 6, 0, 0),
-		Ratings:                  extract.Block("ds:6").OptionalInt64(0, 6, 2, 1).ValueOrZero(),
-		Reviews:                  extract.Block("ds:6").OptionalInt64(0, 6, 3, 1).ValueOrZero(),
-		Histogram:                histogram(extract.Block("ds:6").Json(0, 6, 1), extract.Error),
-		Price:                    price(extract.Block("ds:3").OptionalFloat64(0, 2, 0, 0, 0, 1, 0, 0)),
-		Currency:                 extract.Block("ds:3").OptionalString(0, 2, 0, 0, 0, 1, 0, 1),
-		PriceText:                priceText(extract.Block("ds:3").OptionalString(0, 2, 0, 0, 0, 1, 0, 2)),
-		Sale:                     extract.Block("ds:3").Bool(0, 2, 0, 0, 0, 14, 0, 0),
-		SaleTime:                 saleTime(extract.Block("ds:3").OptionalInt64(0, 2, 0, 0, 0, 14, 0, 0)),
-		OriginalPrice:            originalPrice(extract.Block("ds:3").OptionalFloat64(0, 2, 0, 0, 0, 1, 1, 0)),
-		SaleText:                 extract.Block("ds:3").OptionalString(0, 2, 0, 0, 0, 14, 1),
-		Available:                extract.Block("ds:5").Bool(0, 12, 11, 0),
-		OffersIAP:                inAppPurchases.Valid,
-		IAPRange:                 inAppPurchases,
-		Size:                     extract.Block("ds:8").String(0),
-		AndroidVersion:           extract.Block("ds:8").String(2),
-		Developer:                extract.Block("ds:5").String(0, 12, 5, 1),
-		DeveloperId:              extract.Block("ds:5").Int64(0, 12, 5, 0, 0),
-		DeveloperEmail:           extract.Block("ds:5").OptionalString(0, 12, 5, 2, 0),
-		DeveloperWebsite:         extract.Block("ds:5").OptionalString(0, 12, 5, 3, 5, 2),
-		DeveloperAddress:         extract.Block("ds:5").OptionalString(0, 12, 5, 4, 0),
-		PrivacyPolicy:            extract.Block("ds:5").OptionalString(0, 12, 7, 2),
-		Genre:                    extract.Block("ds:5").String(0, 12, 13, 0, 0),
-		GenreId:                  extract.Block("ds:5").String(0, 12, 13, 0, 2),
-		FamilyGenre:              extract.Block("ds:5").OptionalString(0, 12, 13, 1, 0),
-		FamilyGenreId:            extract.Block("ds:5").OptionalString(0, 12, 13, 1, 2),
-		Icon:                     extract.Block("ds:5").OptionalString(0, 12, 1, 3, 2),
-		HeaderImage:              extract.Block("ds:5").OptionalString(0, 12, 2, 3, 2),
-		Screenshots:              screenshots(extract.Block("ds:5").Json(0, 12, 0), extract.Error),
-		Video:                    extract.Block("ds:5").OptionalString(0, 12, 3, 0, 3, 2),
-		VideoImage:               extract.Block("ds:5").OptionalString(0, 12, 3, 1, 3, 2),
-		ContentRating:            extract.Block("ds:5").OptionalString(0, 12, 4, 0),
-		ContentRatingDescription: extract.Block("ds:5").OptionalString(0, 12, 4, 2, 1),
-		AdSupported:              extract.Block("ds:5").Bool(0, 12, 14, 0),
-		Updated:                  updated(extract.Block("ds:5").Int64(0, 12, 8, 0)),
-		Version:                  extract.Block("ds:8").String(1),
-		RecentChanges:            extract.Block("ds:5").OptionalString(0, 12, 6, 1),
-		Comments:                 comments(extract.BlockWithServiceRequestId("UsvDTd").Json(0), extract.Error),
-		EditorsChoice:            extract.Block("ds:5").Bool(0, 12, 15, 0),
+	permissions, err := extractPermissions(extract.Json("1.2.74.2"))
+	if err != nil {
+		extract.Error(fmt.Errorf("permissions: %w", err))
+	}
+
+	details := Details{
+		AppId:           extract.String("1.2.77.0"),
+		Title:           extract.String("1.2.0.0"),
+		Description:     description,
+		DescriptionHTML: descriptionHTML,
+		Summary:         extract.String("1.2.73.0.1"),
+		Installs:        extract.String("1.2.13.0"),
+		MinInstalls:     extract.Int("1.2.13.1"),
+		MaxInstalls:     extract.Int("1.2.13.2"),
+		Score:           extract.OptionalFloat("1.2.51.0.1"),
+		ScoreText:       extract.OptionalString("1.2.51.0.0"),
+		Ratings:         extract.Int("1.2.51.2.1"),
+		Reviews:         extract.Int("1.2.51.3.1"),
+		Histogram: Histogram{
+			Stars1: extract.Int("1.2.51.1.1.1"),
+			Stars2: extract.Int("1.2.51.1.2.1"),
+			Stars3: extract.Int("1.2.51.1.3.1"),
+			Stars4: extract.Int("1.2.51.1.4.1"),
+			Stars5: extract.Int("1.2.51.1.5.1"),
+		},
+		Price:                    price(extract.Float("1.2.57.0.0.0.0.1.0.0")),
+		Currency:                 extract.OptionalString("1.2.57.0.0.0.0.1.0.1"),
+		PriceText:                priceText(extract.String("1.2.57.0.0.0.0.1.0.2")),
+		SaleEndTime:              extract.OptionalTime("1.2.57.0.0.0.0.14.0.0"),
+		OriginalPrice:            originalPrice(extract.OptionalFloat("1.2.57.0.0.0.0.1.1.0")),
+		OriginalPriceText:        extract.OptionalString("1.2.57.0.0.0.0.1.1.2"),
+		Available:                extract.Int("1.2.42.0") == 1, // This seems to be 3 on countries where apps are not available, e.g. iPlayer outside UK
+		OffersIAP:                iap.Valid && iap.String != "",
+		IAPRange:                 iap,
+		MinAPILevel:              extract.OptionalInt("1.2.140.1.1.0.0.0"),
+		TargetAPILevel:           extract.Int("1.2.140.1.0.0.0"),
+		MinAndroidVersion:        extract.OptionalString("1.2.140.1.1.0.0.1"),
+		Developer:                extract.String("1.2.68.0"),
+		DeveloperId:              developerId(extract, "1.2.68.1.4.2"),
+		DeveloperEmail:           extract.OptionalString("1.2.69.1.0"),
+		DeveloperWebsite:         extract.OptionalString("1.2.69.0.5.2"),
+		DeveloperAddress:         extract.OptionalString("1.2.69.2.0"),
+		PrivacyPolicy:            extract.OptionalString("1.2.99.0.5.2"),
+		Genre:                    extract.String("1.2.79.0.0.2"),
+		AdditionalGenres:         extract.OptionalStringSlice("1.2.118.#.0.0.2"),
+		TeacherApprovedAge:       extract.OptionalString("1.2.111.1"),
+		Icon:                     extract.OptionalString("1.2.95.0.3.2"),
+		HeaderImage:              extract.OptionalString("1.2.96.0.3.2"),
+		Screenshots:              extract.StringSlice("1.2.78.0.#.3.2"),
+		Video:                    extract.OptionalString("1.2.100.0.0.3.2"),
+		VideoImage:               extract.OptionalString("1.2.100.0.1.3.2"),
+		ContentRating:            extract.OptionalString("1.2.9.0"),
+		ContentRatingDescription: extract.OptionalString("1.2.9.6.1"),
+		AdSupported:              !extract.IsNull("1.2.48.0"),
+		Released:                 extract.OptionalTime("1.2.10.1.0"),
+		Updated:                  extract.Time("1.2.145.0.1.0"),
+		Version:                  extract.OptionalString("1.2.140.0.0.0"),
+		RecentChanges:            extract.OptionalString("1.2.144.1.1"),
+		RecentChangesTime:        extract.OptionalTime("1.2.144.2.0"),
+		Permissions:              permissions,
 	}
 
 	if extract.Errors() != nil {
 		err = &DetailsExtractError{
-			AppId:    appId,
-			Country:  country,
-			Language: language,
-			Errors:   extract.Errors(),
-			Body:     body,
+			Errors:  extract.Errors(),
+			Payload: payload,
 		}
+		return nil, err
 	}
 
-	return
+	return &details, nil
 }
 
 type DetailsExtractError struct {
-	AppId    string
-	Country  string
-	Language string
-	Errors   []error
-	Body     []byte
+	Errors  []error
+	Payload string
 }
 
 func (e *DetailsExtractError) Error() string {
 	sb := strings.Builder{}
 
-	sb.WriteString(fmt.Sprintf("Error extracting data from %s (country: %s, language: %s)\n", e.AppId, e.Country, e.Language))
+	sb.WriteString("Error extracting details apps:\n")
 	for _, err := range e.Errors {
 		sb.WriteString(fmt.Sprintf("\t- %s\n", err.Error()))
 	}
@@ -278,99 +192,106 @@ func (e *DetailsExtractError) Error() string {
 	return sb.String()
 }
 
-func price(maybePrice null.Float) float64 {
-	return maybePrice.ValueOrZero() / 1000000
+// There are two types of developer ID:
+// /store/apps/dev?id=5509190841173705883
+// /store/apps/developer?id=TeslaCoil+Software
+func developerId(e *extractor, path string) string {
+	devUrl := e.String(path)
+	if devUrl == "" {
+		e.Error(fmt.Errorf("invalid dev url '%s'", devUrl))
+		return ""
+	}
+
+	u, err := url.Parse(devUrl)
+	if err != nil {
+		e.Error(fmt.Errorf("invalid dev url '%s'", devUrl))
+		return ""
+	}
+
+	if u.Path == "/store/apps/dev" || u.Path == "/store/apps/developer" {
+		id := u.Query().Get("id")
+		if id != "" {
+			return id
+		}
+	}
+
+	e.Error(fmt.Errorf("invalid dev url '%s'", devUrl))
+	return ""
+}
+
+func price(p float64) float64 {
+	return p / 1000000
 }
 
 func originalPrice(maybePrice null.Float) null.Float {
 	return null.NewFloat(maybePrice.Float64/1000000, maybePrice.Valid)
 }
 
-func priceText(maybePriceText null.String) string {
-	priceText := maybePriceText.ValueOrZero()
+func priceText(priceText string) string {
 	if priceText == "" {
 		return "Free"
 	}
 	return priceText
 }
 
-func histogram(val interface{}, errFunc func(error)) Histogram {
-	defer func() {
-		if r := recover(); r != nil {
-			errFunc(fmt.Errorf("histogram: %v", r))
+func extractPermissions(val gjson.Result) ([]Permission, error) {
+	var permissions []Permission
+
+	if !val.IsArray() {
+		return nil, fmt.Errorf("expected an array")
+	}
+
+	for _, subVal := range val.Array() {
+		if !val.IsArray() {
+			return nil, fmt.Errorf("expected an array")
 		}
-	}()
 
-	if val == nil {
-		return Histogram{}
-	}
+		for _, rawPerm := range subVal.Array() {
+			if !rawPerm.IsArray() {
+				return nil, fmt.Errorf("expected an array")
+			}
 
-	return Histogram{
-		Stars1: pluckPanic(val, 1, 1).(json.Number),
-		Stars2: pluckPanic(val, 2, 1).(json.Number),
-		Stars3: pluckPanic(val, 3, 1).(json.Number),
-		Stars4: pluckPanic(val, 4, 1).(json.Number),
-		Stars5: pluckPanic(val, 5, 1).(json.Number),
-	}
-}
+			extract := NewExtractor(rawPerm.String())
 
-func screenshots(val interface{}, errFunc func(error)) []string {
-	defer func() {
-		if r := recover(); r != nil {
-			errFunc(fmt.Errorf("screenshots: %v", r))
-		}
-	}()
+			if len(rawPerm.Array()) == 4 {
+				group := extract.String("0")
+				perms := extract.StringSlice("2.#.1")
 
-	if val == nil {
-		return []string{}
-	}
-
-	var screenshots []string
-
-	for _, s := range val.([]interface{}) {
-		screenshot := pluckPanic(s, 3, 2).(string)
-		screenshots = append(screenshots, screenshot)
-	}
-
-	return screenshots
-}
-
-func comments(val interface{}, errFunc func(error)) []string {
-	defer func() {
-		if r := recover(); r != nil {
-			errFunc(fmt.Errorf("comments: %v", r))
-		}
-	}()
-
-	if val == nil {
-		return []string{}
-	}
-
-	const MAX_COMMENTS_TO_EXTRACT = 5
-	var comments []string
-
-	s := val.([]interface{})
-
-	for i := 0; i < len(s) && len(comments) < MAX_COMMENTS_TO_EXTRACT; i++ {
-		c := s[i]
-		if c != nil {
-			comment, ok := pluckPanic(c, 4).(string)
-			if ok {
-				comments = append(comments, comment)
+				for _, perm := range perms {
+					permissions = append(permissions, Permission{Group: group, Permission: perm})
+				}
+			} else if len(rawPerm.Array()) == 2 {
+				perm := extract.String("1")
+				permissions = append(permissions, Permission{Group: "Other", Permission: perm})
+			} else {
+				return nil, fmt.Errorf("expected an array of length 2 or 4")
 			}
 		}
 	}
 
-	return comments
+	return permissions, nil
 }
 
-func updated(val int64) time.Time {
-	return time.Unix(val, 0).UTC()
-}
-
-func saleTime(val null.Int) null.Time {
-	if val.Valid {
-		return null.TimeFrom(time.Unix(val.Int64, 0).UTC())
+func ScrapeDetails(ctx context.Context, client *http.Client, appId string, country string, language string) (*Details, error) {
+	requester := &detailsBatchRequester{AppId: appId}
+	envelopes, err := sendRequests(ctx, client, country, language, []batchRequester{requester})
+	if err != nil {
+		return nil, err
 	}
-	return null.Time{}
+
+	if len(envelopes) == 0 {
+		return nil, fmt.Errorf("no envelope")
+	}
+	envelope := envelopes[0]
+
+	if len(envelope.Payload) == 0 {
+		return nil, ErrAppNotFound
+	}
+
+	details, err := requester.ParseEnvelope(envelope.Payload)
+	if err != nil {
+		return nil, err
+	}
+
+	return details.(*Details), nil
 }

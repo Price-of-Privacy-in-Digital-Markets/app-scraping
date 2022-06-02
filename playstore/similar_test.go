@@ -9,50 +9,53 @@ import (
 )
 
 func TestSimilar(t *testing.T) {
-	similarApps, err := ScrapeSimilarApps(context.Background(), http.DefaultClient, "bbc.mobile.news.uk", "gb", "en_GB")
+	similarApps, err := ScrapeSimilar(context.Background(), http.DefaultClient, "com.microsoft.office.outlook", "us", "en")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	foundBBCSport := false
-	foundSkyNews := false
+	foundTeams := false
+	foundYahooMail := false
 
 	for _, similarApp := range similarApps {
-		if similarApp.AppId == "uk.co.bbc.android.sportdomestic" {
-			foundBBCSport = true
+		if similarApp.AppId == "com.microsoft.teams" {
+			foundTeams = true
 			assert.Zero(t, similarApp.Price)
-			assert.Equal(t, similarApp.Developer, "BBC Media App Technologies")
-		} else if similarApp.AppId == "com.bskyb.skynews.android" {
-			foundSkyNews = true
+			assert.Equal(t, similarApp.Title, "Microsoft Teams")
+			assert.Equal(t, similarApp.Developer, "Microsoft Corporation")
+		} else if similarApp.AppId == "com.yahoo.mobile.client.android.mail" {
+			foundYahooMail = true
 			assert.Zero(t, similarApp.Price)
-			assert.Equal(t, similarApp.Title, "Sky News: Breaking, UK, & World")
-			assert.Equal(t, similarApp.Developer, "Sky UK Limited")
+			assert.Equal(t, similarApp.Title, "Yahoo Mail – Organized Email")
+			assert.Equal(t, similarApp.Developer, "Yahoo")
 		}
 	}
 
-	assert.True(t, foundBBCSport)
-	assert.True(t, foundSkyNews)
+	assert.Len(t, similarApps, 20)
+	assert.True(t, foundTeams)
+	assert.True(t, foundYahooMail)
 }
 
 func TestSimilarPaid(t *testing.T) {
-	similarApps, err := ScrapeSimilarApps(context.Background(), http.DefaultClient, "uk.co.focusmm.DTSCombo", "gb", "en_GB")
+	similarApps, err := ScrapeSimilar(context.Background(), http.DefaultClient, "com.tocaboca.tocahospital", "us", "en")
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	for _, similarApp := range similarApps {
-		if similarApp.AppId == "uk.co.tso.ctt" {
+		if similarApp.AppId == "com.tocaboca.tocaneighborhood" {
 			assert.Positive(t, similarApp.Price)
-			assert.Equal(t, similarApp.Currency, "GBP")
+			assert.Equal(t, similarApp.Currency, "USD")
 		}
 	}
 }
 
 func TestSimilarNotFound(t *testing.T) {
-	similarApps, err := ScrapeSimilarApps(context.Background(), http.DefaultClient, nonExistentAppId, "gb", "en_GB")
-	if err != nil {
+	similarApps, err := ScrapeSimilar(context.Background(), http.DefaultClient, nonExistentAppId, "us", "en")
+	if err != nil && err != ErrAppNotFound {
 		t.Fatal(err)
 	}
 
+	assert.Equal(t, err, ErrAppNotFound)
 	assert.Len(t, similarApps, 0)
 }
