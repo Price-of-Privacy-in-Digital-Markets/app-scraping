@@ -11,13 +11,13 @@ import (
 )
 
 type SimilarApp struct {
-	AppId     string     `json:"app_id"`
-	Title     string     `json:"title"`
-	Developer string     `json:"developer"`
-	Score     null.Float `json:"score"`
-	ScoreText string     `json:"score_text"`
-	Price     float64    `json:"price"`
-	Currency  string     `json:"currency"`
+	AppId     string      `json:"app_id"`
+	Title     string      `json:"title"`
+	Developer string      `json:"developer"`
+	Score     null.Float  `json:"score"`
+	ScoreText null.String `json:"score_text"`
+	Price     null.Float  `json:"price"`
+	Currency  null.String `json:"currency"`
 }
 
 type SimilarAppsExtractError struct {
@@ -40,6 +40,10 @@ type similarBatchRequester struct {
 	AppId string
 }
 
+func NewSimilarBatchRequester(appId string) *similarBatchRequester {
+	return &similarBatchRequester{AppId: appId}
+}
+
 func (br *similarBatchRequester) BatchRequest() batchRequest {
 	return batchRequest{
 		RpcId:   "ag2B9c",
@@ -48,6 +52,10 @@ func (br *similarBatchRequester) BatchRequest() batchRequest {
 }
 
 func (br *similarBatchRequester) ParseEnvelope(payload string) (interface{}, error) {
+	if payload == "" {
+		return nil, ErrAppNotFound
+	}
+
 	result := gjson.Get(payload, "1.1.1.21.0")
 
 	if result.Type == gjson.Null {
@@ -55,33 +63,30 @@ func (br *similarBatchRequester) ParseEnvelope(payload string) (interface{}, err
 		return []SimilarApp{}, nil
 	}
 
-	extract := NewExtractor(result.Raw)
-
-	appIds := extract.StringSlice("#.0.0")
-	titles := extract.StringSlice("#.3")
-	developers := extract.StringSlice("#.14")
-	scores := extract.OptionalFloatSlice("#.4.1")
-	scoreTexts := extract.StringSlice("#.4.0")
-	prices := extract.FloatSlice("#.8.1.0.0")
-	currencies := extract.StringSlice("#.8.1.0.1")
-
-	if len(extract.Errors()) > 0 {
-		return nil, &SimilarAppsExtractError{Errors: extract.Errors(), Payload: payload}
+	if !result.IsArray() {
+		return nil, fmt.Errorf("wrong type: not array")
 	}
 
-	n := len(appIds)
-	similarApps := make([]SimilarApp, 0, n)
+	rawApps := result.Array()
+	similarApps := make([]SimilarApp, 0, len(rawApps))
 
-	for i := 0; i < n; i++ {
+	for _, rawApp := range rawApps {
+		extract := NewExtractor(rawApp.Raw)
+
 		similarApp := SimilarApp{
-			AppId:     appIds[i],
-			Title:     titles[i],
-			Developer: developers[i],
-			Score:     scores[i],
-			ScoreText: scoreTexts[i],
-			Price:     price(prices[i]),
-			Currency:  currencies[i],
+			AppId:     extract.String("0.0"),
+			Title:     extract.String("3"),
+			Developer: extract.String("14"),
+			Score:     extract.OptionalFloat("4.1"),
+			ScoreText: extract.OptionalString("4.0"),
+			Price:     maybePrice(extract.OptionalFloat("8.1.0.0")),
+			Currency:  extract.OptionalString("8.1.0.1"),
 		}
+
+		if len(extract.Errors()) > 0 {
+			return nil, &SimilarAppsExtractError{Errors: extract.Errors(), Payload: payload}
+		}
+
 		similarApps = append(similarApps, similarApp)
 	}
 
@@ -89,8 +94,8 @@ func (br *similarBatchRequester) ParseEnvelope(payload string) (interface{}, err
 }
 
 func ScrapeSimilar(ctx context.Context, client *http.Client, appId string, country string, language string) ([]SimilarApp, error) {
-	requester := &similarBatchRequester{AppId: appId}
-	envelopes, err := sendRequests(ctx, client, country, language, []batchRequester{requester})
+	requester := NewSimilarBatchRequester(appId)
+	envelopes, err := sendRequests(ctx, client, country, language, []BatchRequester{requester})
 	if err != nil {
 		return nil, err
 	}
@@ -99,10 +104,6 @@ func ScrapeSimilar(ctx context.Context, client *http.Client, appId string, count
 		return nil, fmt.Errorf("no envelope")
 	}
 	envelope := envelopes[0]
-
-	if len(envelope.Payload) == 0 {
-		return nil, ErrAppNotFound
-	}
 
 	similar, err := requester.ParseEnvelope(envelope.Payload)
 	if err != nil {

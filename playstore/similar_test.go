@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"gopkg.in/guregu/null.v4"
 )
 
 func TestSimilar(t *testing.T) {
@@ -20,12 +21,12 @@ func TestSimilar(t *testing.T) {
 	for _, similarApp := range similarApps {
 		if similarApp.AppId == "com.microsoft.teams" {
 			foundTeams = true
-			assert.Zero(t, similarApp.Price)
+			assert.Equal(t, null.FloatFrom(0), similarApp.Price)
 			assert.Equal(t, similarApp.Title, "Microsoft Teams")
 			assert.Equal(t, similarApp.Developer, "Microsoft Corporation")
 		} else if similarApp.AppId == "com.yahoo.mobile.client.android.mail" {
 			foundYahooMail = true
-			assert.Zero(t, similarApp.Price)
+			assert.Equal(t, null.FloatFrom(0), similarApp.Price)
 			assert.Equal(t, similarApp.Title, "Yahoo Mail – Organized Email")
 			assert.Equal(t, similarApp.Developer, "Yahoo")
 		}
@@ -44,8 +45,9 @@ func TestSimilarPaid(t *testing.T) {
 
 	for _, similarApp := range similarApps {
 		if similarApp.AppId == "com.tocaboca.tocaneighborhood" {
-			assert.Positive(t, similarApp.Price)
-			assert.Equal(t, similarApp.Currency, "USD")
+			assert.True(t, similarApp.Price.Valid)
+			assert.Positive(t, similarApp.Price.Float64)
+			assert.Equal(t, null.StringFrom("USD"), similarApp.Currency)
 		}
 	}
 }

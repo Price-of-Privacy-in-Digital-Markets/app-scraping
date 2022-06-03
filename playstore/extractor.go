@@ -120,7 +120,7 @@ func (e *extractor) StringSlice(path string) []string {
 	for i, r := range results {
 		switch r.Type {
 		case gjson.String:
-			slice = append(slice, r.Str)
+			slice = append(slice, strings.ReplaceAll(r.Str, "\x00", ""))
 		default:
 			e.error(fmt.Sprintf("%s.%d", path, i), "wrong type")
 			return nil
@@ -182,7 +182,7 @@ func (e *extractor) Time(path string) time.Time {
 		return time.Time{}
 	}
 
-	return time.Unix(i, 0)
+	return time.Unix(i, 0).UTC()
 }
 
 func (e *extractor) Json(path string) gjson.Result {
@@ -266,7 +266,7 @@ func (e *extractor) OptionalStringSlice(path string) []string {
 	for i, r := range results {
 		switch r.Type {
 		case gjson.String:
-			slice = append(slice, r.Str)
+			slice = append(slice, strings.ReplaceAll(r.Str, "\x00", ""))
 		case gjson.Null:
 			continue
 		default:
@@ -289,5 +289,5 @@ func (e *extractor) OptionalTime(path string) null.Time {
 		return null.Time{}
 	}
 
-	return null.TimeFrom(time.Unix(i, 0))
+	return null.TimeFrom(time.Unix(i, 0).UTC())
 }

@@ -4,21 +4,26 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/tidwall/gjson"
 )
 
+var ErrRateLimited error = errors.New("google detected unusual traffic")
+
 type envelope struct {
 	RpcId   string
 	Payload string
+	Number  int
 }
 
-type batchRequester interface {
+type BatchRequester interface {
 	BatchRequest() batchRequest
 	ParseEnvelope(string) (interface{}, error)
 }
@@ -31,7 +36,13 @@ type batchRequest struct {
 // See https://kovatch.medium.com/deciphering-google-batchexecute-74991e4e446c for more
 // information about Google's RPC. We are interested in the wrb.fr response.
 func respToEnvelopes(body []byte) ([]envelope, error) {
+	if bytes.HasPrefix(body, []byte("<!DOCTYPE html")) {
+		// Google is not happy with us :(
+		return nil, ErrRateLimited
+	}
+
 	if !bytes.HasPrefix(body, []byte(")]}'\n\n")) {
+		fmt.Println(string(body))
 		return nil, fmt.Errorf("invalid response")
 	}
 
@@ -63,6 +74,16 @@ func respToEnvelopes(body []byte) ([]envelope, error) {
 					return nil, fmt.Errorf("envelope has invalid JSON payload")
 				}
 
+				var number string
+				if err := json.Unmarshal(rawEnvelope[6], &number); err != nil {
+					return nil, err
+				}
+				if n, err := strconv.Atoi(number); err != nil {
+					return nil, err
+				} else {
+					envelope.Number = n
+				}
+
 				envelopes = append(envelopes, envelope)
 			}
 		}
@@ -71,7 +92,7 @@ func respToEnvelopes(body []byte) ([]envelope, error) {
 	return envelopes, nil
 }
 
-func sendRequests(ctx context.Context, client *http.Client, country string, language string, requesters []batchRequester) ([]envelope, error) {
+func sendRequests(ctx context.Context, client *http.Client, country string, language string, requesters []BatchRequester) ([]envelope, error) {
 	const batchExecuteUrl = "https://play.google.com/_/PlayStoreUi/data/batchexecute"
 
 	// Make the body of the request
@@ -79,7 +100,7 @@ func sendRequests(ctx context.Context, client *http.Client, country string, lang
 	fReq := make([][]*string, 0, len(requesters))
 	for i, requester := range requesters {
 		br := requester.BatchRequest()
-		num := fmt.Sprintf("%d", i+1)
+		num := fmt.Sprintf("%d", i)
 		fReq = append(fReq, []*string{&br.RpcId, &br.Payload, nil, &num})
 		rpcids = append(rpcids, br.RpcId)
 	}
@@ -126,4 +147,22 @@ func sendRequests(ctx context.Context, client *http.Client, country string, lang
 	}
 
 	return envelopes, nil
+}
+
+func SendBatchedRequests(ctx context.Context, client *http.Client, country string, language string, requesters []BatchRequester) ([]interface{}, error) {
+	envelopes, err := sendRequests(ctx, client, country, language, requesters)
+	if err != nil {
+		return nil, err
+	}
+
+	output := make([]interface{}, len(requesters))
+
+	for _, envelope := range envelopes {
+		output[envelope.Number], err = requesters[envelope.Number].ParseEnvelope(envelope.Payload)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return output, nil
 }

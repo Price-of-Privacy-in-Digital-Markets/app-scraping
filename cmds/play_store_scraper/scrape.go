@@ -20,11 +20,10 @@ import (
 )
 
 type ScrapedApp struct {
-	// AppId    string
-	// Country  string
-	// Language string
+	AppId    string `json:"app_id"`
+	Country  string `json:"country"`
+	Language string `json:"language"`
 	playstore.Details
-	Permissions []playstore.Permission `json:"permissions"`
 	SimilarApps []playstore.SimilarApp `json:"similar"`
 	DataSafety  *playstore.DataSafety  `json:"data_safety"`
 	prices      []PriceInfo
@@ -182,8 +181,14 @@ func Scrape(ctx context.Context, db *sql.DB, numScrapers int) error {
 									continue MainLoop
 								}
 
+								if errors.Is(err, playstore.ErrRateLimited) {
+									log.Print(err)
+									continue MainLoop
+								}
+
 								var errExtractDetails *playstore.DetailsExtractError
 								if errors.As(err, &errExtractDetails) {
+									fmt.Println(errExtractDetails.Payload)
 									log.Print(errExtractDetails)
 									continue MainLoop
 								}
@@ -275,70 +280,32 @@ func appsToScrape(ctx context.Context, db *sql.DB, n int) ([]string, error) {
 }
 
 func ScrapeApp(ctx context.Context, client *http.Client, scrapedC chan<- ScrapedApp, notFoundC chan<- string, config ScrapeConfig, appId string) error {
-	// Fire off a number of requests simultaneously for details, similar apps and permissions
-	errgrp, scrapeCtx := errgroup.WithContext(ctx)
+	// Batch requests for details, similar apps and data safety
+	requesters := []playstore.BatchRequester{
+		playstore.NewDetailsBatchRequester(appId),
+		playstore.NewSimilarBatchRequester(appId),
+		playstore.NewDataSafetyRequester(appId),
+	}
 
-	detailsC := make(chan playstore.Details, 1)
-	errgrp.Go(func() error {
-		details, err := playstore.ScrapeDetails(scrapeCtx, client, appId, config.Country, config.Language)
-		if err != nil {
-			return err
+	responses, err := playstore.SendBatchedRequests(ctx, client, config.Country, config.Language, requesters)
+	if errors.Is(err, playstore.ErrAppNotFound) {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case notFoundC <- appId:
+			return nil
 		}
-
-		detailsC <- details
-		return nil
-	})
-
-	similarC := make(chan []playstore.SimilarApp, 1)
-	errgrp.Go(func() error {
-		similarApps, err := playstore.ScrapeSimilarApps(scrapeCtx, client, appId, config.Country, config.Language)
-		if err != nil {
-			return err
-		}
-
-		similarC <- similarApps
-		return nil
-	})
-
-	permissionsC := make(chan []playstore.Permission, 1)
-	errgrp.Go(func() error {
-		permissions, err := playstore.ScrapePermissions(scrapeCtx, client, appId)
-		if err != nil {
-			return err
-		}
-
-		permissionsC <- permissions
-		return nil
-	})
-
-	dataSafetyC := make(chan *playstore.DataSafety, 1)
-	errgrp.Go(func() error {
-		dataSafety, err := playstore.ScrapeDataSafety(scrapeCtx, client, appId)
-		if err != nil {
-			return fmt.Errorf("cannot scrape data safety of app %s: %w", appId, err)
-		}
-
-		dataSafetyC <- dataSafety
-		return nil
-	})
-
-	if err := errgrp.Wait(); err != nil {
-		if errors.Is(err, playstore.ErrAppNotFound) {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case notFoundC <- appId:
-				return nil
-			}
-		}
-
+	}
+	if err != nil {
 		return err
 	}
 
-	details := <-detailsC
-	similar := <-similarC
-	permissions := <-permissionsC
-	dataSafety := <-dataSafetyC
+	details := responses[0].(*playstore.Details)
+	similar := responses[1].([]playstore.SimilarApp)
+	var dataSafety *playstore.DataSafety
+	if responses[2] != nil {
+		dataSafety = responses[2].(*playstore.DataSafety)
+	}
 
 	var prices []PriceInfo
 
@@ -370,14 +337,20 @@ func ScrapeApp(ctx context.Context, client *http.Client, scrapedC chan<- Scraped
 
 				// Sometimes when looking at other countries, the Play Store can report apps as not found
 				// (404 error) rather than unavailable.
-				if err != nil && !errors.Is(err, playstore.ErrAppNotFound) {
+				if err == playstore.ErrAppNotFound {
+					prices[i+1] = PriceInfo{
+						Country: country,
+					}
+					return nil
+				}
+				if err != nil {
 					return err
 				}
 
 				// Some apps don't have a valid currency but I think this is only free apps.
 				// Return Error if otherwise. Only check if the currency is valid or not if
 				// the app was found.
-				if !errors.Is(err, playstore.ErrAppNotFound) && !details.Currency.Valid {
+				if !details.Currency.Valid {
 					return fmt.Errorf("paid app does not have currency: %s", appId)
 				}
 
@@ -399,9 +372,11 @@ func ScrapeApp(ctx context.Context, client *http.Client, scrapedC chan<- Scraped
 	}
 
 	scrapedApp := ScrapedApp{
-		Details:     details,
+		AppId:       appId,
+		Country:     config.Country,
+		Language:    config.Language,
+		Details:     *details,
 		SimilarApps: similar,
-		Permissions: permissions,
 		DataSafety:  dataSafety,
 		prices:      prices,
 	}

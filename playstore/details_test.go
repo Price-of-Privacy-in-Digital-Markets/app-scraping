@@ -24,18 +24,15 @@ func TestScrapeDetails(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	assert.Equal(t, "com.sgn.pandapop.gp", details.AppId)
-	// assert.Equal(t, "us", details.Country)
-
 	assert.True(t, details.Available)
 
 	assert.Equal(t, "Bubble Shooter: Panda Pop!", details.Title)
-	assert.Equal(t, "Match 3: Shoot &amp; Blast Bubbles", details.Summary)
-	assert.Equal(t, null.TimeFrom(time.Date(2014, time.January, 10, 4, 15, 29, 0, time.Local)), details.Released)
+	assert.Equal(t, null.StringFrom("Match 3: Shoot &amp; Blast Bubbles"), details.Summary)
+	assert.Equal(t, null.TimeFrom(time.Date(2014, time.January, 10, 4, 15, 29, 0, time.UTC)), details.Released)
 
-	assert.Equal(t, "50,000,000+", details.Installs)
-	assert.Positive(t, details.MinInstalls)
-	assert.Positive(t, details.MaxInstalls)
+	assert.Equal(t, null.StringFrom("50,000,000+"), details.Installs)
+	assert.Positive(t, details.MinInstalls.Int64)
+	assert.Positive(t, details.MaxInstalls.Int64)
 
 	assert.True(t, details.Score.Valid)
 	if !(1 <= details.Score.Float64 && details.Score.Float64 <= 5) {

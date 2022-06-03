@@ -20,6 +20,23 @@ PERMISSION_T = pa.struct([
     ("permission", pa.string()),
 ])
 
+DATA_TYPE_T = pa.struct([
+    ("name", pa.string()),
+    ("optional", pa.bool_()),
+    ("purposes", pa.string())
+])
+
+DATA_CATEGORY_T = pa.struct([
+    ("category", pa.string()),
+    ("data_types", pa.list_(DATA_TYPE_T))
+])
+
+DATA_SAFETY_T = pa.struct([
+    ("collection", pa.list_(DATA_CATEGORY_T)),
+    ("sharing", pa.list_(DATA_CATEGORY_T)),
+    ("security_practices", pa.list_(pa.string()))
+])
+
 SCHEMA = pa.schema([
     pa.field("app_id", pa.string(), nullable=False),
     pa.field("scraped_when", pa.timestamp("s")),
@@ -35,23 +52,24 @@ SCHEMA = pa.schema([
     pa.field("histogram", HISTOGRAM_T),
     pa.field("price", pa.float64()),
     pa.field("currency", pa.string()),
-    pa.field("sale", pa.bool_()),
-    pa.field("sale_time", pa.timestamp("s")),
+    pa.field("sale_end_time", pa.timestamp("s")),
     pa.field("original_price", pa.float64()),
     pa.field("sale_text", pa.string()),
     pa.field("available", pa.bool_()),
     pa.field("in_app_purchases", pa.bool_()),
     pa.field("in_app_purchases_range", pa.string()),
-    pa.field("size", pa.string()),
-    pa.field("android_version", pa.string()),
+    pa.field("min_api", pa.int32()),
+    pa.field("target_api", pa.int32()),
+    pa.field("min_android_version", pa.string()),
     pa.field("developer", pa.string()),
-    pa.field("developer_id", pa.int64()),
+    pa.field("developer_id", pa.string()),
     pa.field("developer_email", pa.string()),
     pa.field("developer_website", pa.string()),
     pa.field("developer_address", pa.string()),
     pa.field("privacy_policy", pa.string()),
     pa.field("genre_id", pa.string()),
-    pa.field("family_genre_id", pa.string()),
+    pa.field("additional_genre_ids", pa.list_(pa.string())),
+    pa.field("teacher_approved_age", pa.string()),
     pa.field("icon", pa.string()),
     pa.field("header_image", pa.string()),
     pa.field("screenshots", pa.list_(pa.string())),
@@ -60,13 +78,14 @@ SCHEMA = pa.schema([
     pa.field("content_rating", pa.string()),
     pa.field("content_rating_description", pa.string()),
     pa.field("ad_supported", pa.bool_()),
+    pa.field("released", pa.timestamp("s")),
     pa.field("updated", pa.timestamp("s")),
     pa.field("version", pa.string()),
     pa.field("recent_changes", pa.string()),
-    pa.field("comments", pa.list_(pa.string())),
-    pa.field("editors_choice", pa.bool_()),
+    pa.field("recent_changes_time", pa.timestamp("s")),
     pa.field("similar", pa.list_(pa.string())),
-    pa.field("permissions", pa.list_(PERMISSION_T))
+    pa.field("permissions", pa.list_(PERMISSION_T)),
+    pa.field("data_safety", DATA_SAFETY_T)
 ])
 
 PRICE_SCHEMA = pa.schema([

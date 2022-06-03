@@ -97,6 +97,10 @@ type dataSafetyRequester struct {
 	AppId string
 }
 
+func NewDataSafetyRequester(appId string) *dataSafetyRequester {
+	return &dataSafetyRequester{AppId: appId}
+}
+
 func (br *dataSafetyRequester) BatchRequest() batchRequest {
 	return batchRequest{
 		RpcId:   "Ws7gDc",
@@ -161,9 +165,9 @@ func (br *dataSafetyRequester) ParseEnvelope(payload string) (interface{}, error
 }
 
 func ScrapeDataSafety(ctx context.Context, client *http.Client, appId string) (*DataSafety, error) {
-	requester := &dataSafetyRequester{AppId: appId}
+	requester := NewDataSafetyRequester(appId)
 
-	envelopes, err := sendRequests(ctx, client, "us", "en", []batchRequester{requester})
+	envelopes, err := sendRequests(ctx, client, "us", "en", []BatchRequester{requester})
 	if err != nil {
 		return nil, err
 	}

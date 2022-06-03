@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"time"
 
@@ -13,16 +14,13 @@ import (
 )
 
 type Details struct {
-	AppId                    string       `json:"app_id"`
-	Country                  string       `json:"country"`
-	Language                 string       `json:"language"`
 	Title                    string       `json:"title"`
 	Description              string       `json:"description"`
 	DescriptionHTML          string       `json:"description_html"`
-	Summary                  string       `json:"summary"`
-	Installs                 string       `json:"installs"`
-	MinInstalls              int64        `json:"min_installs"`
-	MaxInstalls              int64        `json:"max_installs"`
+	Summary                  null.String  `json:"summary"`
+	Installs                 null.String  `json:"installs"`
+	MinInstalls              null.Int     `json:"min_installs"`
+	MaxInstalls              null.Int     `json:"max_installs"`
 	Score                    null.Float   `json:"score"`
 	ScoreText                null.String  `json:"score_text"`
 	Ratings                  int64        `json:"ratings"`
@@ -31,7 +29,6 @@ type Details struct {
 	Price                    float64      `json:"price"`
 	Currency                 null.String  `json:"currency"`
 	PriceText                string       `json:"price_text"`
-	Sale                     bool         `json:"sale"`
 	SaleEndTime              null.Time    `json:"sale_end_time"`
 	OriginalPrice            null.Float   `json:"original_price"`
 	OriginalPriceText        null.String  `json:"original_price_text"`
@@ -41,7 +38,7 @@ type Details struct {
 	IAPRange                 null.String  `json:"in_app_purchases_range"`
 	Size                     string       `json:"size"`
 	MinAPILevel              null.Int     `json:"min_api"`
-	TargetAPILevel           int64        `json:"target_api"`
+	TargetAPILevel           null.Int     `json:"target_api"`
 	MinAndroidVersion        null.String  `json:"min_android_version"`
 	Developer                string       `json:"developer"`
 	DeveloperId              string       `json:"developer_id"`
@@ -81,8 +78,14 @@ type Permission struct {
 	Permission string `json:"permission"`
 }
 
+type DetailsBatchRequester string
+
 type detailsBatchRequester struct {
 	AppId string
+}
+
+func NewDetailsBatchRequester(appId string) *detailsBatchRequester {
+	return &detailsBatchRequester{AppId: appId}
 }
 
 func (br *detailsBatchRequester) BatchRequest() batchRequest {
@@ -93,6 +96,10 @@ func (br *detailsBatchRequester) BatchRequest() batchRequest {
 }
 
 func (br *detailsBatchRequester) ParseEnvelope(payload string) (interface{}, error) {
+	if payload == "" {
+		return nil, ErrAppNotFound
+	}
+
 	extract := NewExtractor(payload)
 
 	descriptionHTML := extract.String("1.2.72.0.1")
@@ -109,36 +116,35 @@ func (br *detailsBatchRequester) ParseEnvelope(payload string) (interface{}, err
 	}
 
 	details := Details{
-		AppId:           extract.String("1.2.77.0"),
 		Title:           extract.String("1.2.0.0"),
 		Description:     description,
 		DescriptionHTML: descriptionHTML,
-		Summary:         extract.String("1.2.73.0.1"),
-		Installs:        extract.String("1.2.13.0"),
-		MinInstalls:     extract.Int("1.2.13.1"),
-		MaxInstalls:     extract.Int("1.2.13.2"),
+		Summary:         extract.OptionalString("1.2.73.0.1"),
+		Installs:        extract.OptionalString("1.2.13.0"),
+		MinInstalls:     extract.OptionalInt("1.2.13.1"),
+		MaxInstalls:     extract.OptionalInt("1.2.13.2"),
 		Score:           extract.OptionalFloat("1.2.51.0.1"),
 		ScoreText:       extract.OptionalString("1.2.51.0.0"),
-		Ratings:         extract.Int("1.2.51.2.1"),
-		Reviews:         extract.Int("1.2.51.3.1"),
+		Ratings:         extract.OptionalInt("1.2.51.2.1").ValueOrZero(),
+		Reviews:         extract.OptionalInt("1.2.51.3.1").ValueOrZero(),
 		Histogram: Histogram{
-			Stars1: extract.Int("1.2.51.1.1.1"),
-			Stars2: extract.Int("1.2.51.1.2.1"),
-			Stars3: extract.Int("1.2.51.1.3.1"),
-			Stars4: extract.Int("1.2.51.1.4.1"),
-			Stars5: extract.Int("1.2.51.1.5.1"),
+			Stars1: extract.OptionalInt("1.2.51.1.1.1").ValueOrZero(),
+			Stars2: extract.OptionalInt("1.2.51.1.2.1").ValueOrZero(),
+			Stars3: extract.OptionalInt("1.2.51.1.3.1").ValueOrZero(),
+			Stars4: extract.OptionalInt("1.2.51.1.4.1").ValueOrZero(),
+			Stars5: extract.OptionalInt("1.2.51.1.5.1").ValueOrZero(),
 		},
-		Price:                    price(extract.Float("1.2.57.0.0.0.0.1.0.0")),
+		Price:                    price(extract.OptionalFloat("1.2.57.0.0.0.0.1.0.0").ValueOrZero()),
 		Currency:                 extract.OptionalString("1.2.57.0.0.0.0.1.0.1"),
-		PriceText:                priceText(extract.String("1.2.57.0.0.0.0.1.0.2")),
+		PriceText:                priceText(extract.OptionalString("1.2.57.0.0.0.0.1.0.2").ValueOrZero()),
 		SaleEndTime:              extract.OptionalTime("1.2.57.0.0.0.0.14.0.0"),
-		OriginalPrice:            originalPrice(extract.OptionalFloat("1.2.57.0.0.0.0.1.1.0")),
+		OriginalPrice:            maybePrice(extract.OptionalFloat("1.2.57.0.0.0.0.1.1.0")),
 		OriginalPriceText:        extract.OptionalString("1.2.57.0.0.0.0.1.1.2"),
 		Available:                extract.Int("1.2.42.0") == 1, // This seems to be 3 on countries where apps are not available, e.g. iPlayer outside UK
 		OffersIAP:                iap.Valid && iap.String != "",
 		IAPRange:                 iap,
 		MinAPILevel:              extract.OptionalInt("1.2.140.1.1.0.0.0"),
-		TargetAPILevel:           extract.Int("1.2.140.1.0.0.0"),
+		TargetAPILevel:           extract.OptionalInt("1.2.140.1.0.0.0"),
 		MinAndroidVersion:        extract.OptionalString("1.2.140.1.1.0.0.1"),
 		Developer:                extract.String("1.2.68.0"),
 		DeveloperId:              developerId(extract, "1.2.68.1.4.2"),
@@ -151,7 +157,7 @@ func (br *detailsBatchRequester) ParseEnvelope(payload string) (interface{}, err
 		TeacherApprovedAge:       extract.OptionalString("1.2.111.1"),
 		Icon:                     extract.OptionalString("1.2.95.0.3.2"),
 		HeaderImage:              extract.OptionalString("1.2.96.0.3.2"),
-		Screenshots:              extract.StringSlice("1.2.78.0.#.3.2"),
+		Screenshots:              extract.OptionalStringSlice("1.2.78.0.#.3.2"),
 		Video:                    extract.OptionalString("1.2.100.0.0.3.2"),
 		VideoImage:               extract.OptionalString("1.2.100.0.1.3.2"),
 		ContentRating:            extract.OptionalString("1.2.9.0"),
@@ -192,14 +198,25 @@ func (e *DetailsExtractError) Error() string {
 	return sb.String()
 }
 
+var developerIdRe = regexp.MustCompile(`^/store/apps/developer\?id=(.*)$`)
+
 // There are two types of developer ID:
 // /store/apps/dev?id=5509190841173705883
 // /store/apps/developer?id=TeslaCoil+Software
 func developerId(e *extractor, path string) string {
 	devUrl := e.String(path)
+
 	if devUrl == "" {
 		e.Error(fmt.Errorf("invalid dev url '%s'", devUrl))
 		return ""
+	}
+
+	// For some stupid reason, the Play Store allows semicolons and other characters in
+	// the ID parameter, e.g. /store/apps/developer?id=Prodev;+My+Pro+Apps, so we can't
+	// use Go's url parsing but have to use a regex instead.
+	matches := developerIdRe.FindStringSubmatch(devUrl)
+	if matches != nil {
+		return matches[1]
 	}
 
 	u, err := url.Parse(devUrl)
@@ -208,7 +225,7 @@ func developerId(e *extractor, path string) string {
 		return ""
 	}
 
-	if u.Path == "/store/apps/dev" || u.Path == "/store/apps/developer" {
+	if u.Path == "/store/apps/dev" {
 		id := u.Query().Get("id")
 		if id != "" {
 			return id
@@ -223,7 +240,7 @@ func price(p float64) float64 {
 	return p / 1000000
 }
 
-func originalPrice(maybePrice null.Float) null.Float {
+func maybePrice(maybePrice null.Float) null.Float {
 	return null.NewFloat(maybePrice.Float64/1000000, maybePrice.Valid)
 }
 
@@ -237,7 +254,7 @@ func priceText(priceText string) string {
 func extractPermissions(val gjson.Result) ([]Permission, error) {
 	var permissions []Permission
 
-	if !val.IsArray() {
+	if !(val.IsArray() || val.Type == gjson.Null) {
 		return nil, fmt.Errorf("expected an array")
 	}
 
@@ -251,16 +268,20 @@ func extractPermissions(val gjson.Result) ([]Permission, error) {
 				return nil, fmt.Errorf("expected an array")
 			}
 
-			extract := NewExtractor(rawPerm.String())
+			rawPermArray := rawPerm.Array()
 
-			if len(rawPerm.Array()) == 4 {
+			if len(rawPermArray) == 0 {
+				continue
+			} else if len(rawPermArray) == 4 {
+				extract := NewExtractor(rawPerm.String())
 				group := extract.String("0")
 				perms := extract.StringSlice("2.#.1")
 
 				for _, perm := range perms {
 					permissions = append(permissions, Permission{Group: group, Permission: perm})
 				}
-			} else if len(rawPerm.Array()) == 2 {
+			} else if len(rawPermArray) == 2 {
+				extract := NewExtractor(rawPerm.String())
 				perm := extract.String("1")
 				permissions = append(permissions, Permission{Group: "Other", Permission: perm})
 			} else {
@@ -273,8 +294,8 @@ func extractPermissions(val gjson.Result) ([]Permission, error) {
 }
 
 func ScrapeDetails(ctx context.Context, client *http.Client, appId string, country string, language string) (*Details, error) {
-	requester := &detailsBatchRequester{AppId: appId}
-	envelopes, err := sendRequests(ctx, client, country, language, []batchRequester{requester})
+	requester := NewDetailsBatchRequester(appId)
+	envelopes, err := sendRequests(ctx, client, country, language, []BatchRequester{requester})
 	if err != nil {
 		return nil, err
 	}
@@ -283,10 +304,6 @@ func ScrapeDetails(ctx context.Context, client *http.Client, appId string, count
 		return nil, fmt.Errorf("no envelope")
 	}
 	envelope := envelopes[0]
-
-	if len(envelope.Payload) == 0 {
-		return nil, ErrAppNotFound
-	}
 
 	details, err := requester.ParseEnvelope(envelope.Payload)
 	if err != nil {
