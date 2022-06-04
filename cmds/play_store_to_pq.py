@@ -21,7 +21,7 @@ PERMISSION_T = pa.struct([
 ])
 
 DATA_TYPE_T = pa.struct([
-    ("name", pa.string()),
+    ("data_type", pa.string()),
     ("optional", pa.bool_()),
     ("purposes", pa.string())
 ])
