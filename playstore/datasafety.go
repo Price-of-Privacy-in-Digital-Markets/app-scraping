@@ -64,7 +64,7 @@ func (dc *DataCategory) UnmarshalJSON(p []byte) error {
 
 type DataType struct {
 	Name     string `json:"data_type"`
-	Optional bool   `json:"optional"` // TODO: Or required??
+	Optional bool   `json:"optional"`
 	Purposes string `json:"purposes"`
 }
 
