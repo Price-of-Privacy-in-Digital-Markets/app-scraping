@@ -110,9 +110,7 @@ func TestDetails2(t *testing.T) {
 
 	assert.Contains(t, details.Permissions, Permission{Group: "Wi-Fi connection information", Permission: "view Wi-Fi connections"})
 	assert.Contains(t, details.Permissions, Permission{Group: "Storage", Permission: "read the contents of your USB storage"})
-	assert.Contains(t, details.Permissions, Permission{Group: "Storage", Permission: "modify or delete the contents of your USB storage"})
 	assert.Contains(t, details.Permissions, Permission{Group: "Photos/Media/Files", Permission: "read the contents of your USB storage"})
-	assert.Contains(t, details.Permissions, Permission{Group: "Photos/Media/Files", Permission: "modify or delete the contents of your USB storage"})
 	assert.Contains(t, details.Permissions, Permission{Group: "Other", Permission: "Google Play license check"})
 	assert.Contains(t, details.Permissions, Permission{Group: "Other", Permission: "full network access"})
 }
